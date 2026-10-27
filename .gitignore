@@ -1,0 +1,15 @@
+# 敏感/本地数据（不入库）
+backend/config.json
+backend/campus_agent.db*
+backend/__pycache__/
+
+# output 目录整体不上传（本地运行产物），仅白名单以下部署所需文件
+output/*
+!output/byau_import_rag.py
+!output/byau_crawl_state.json
+!output/README_部署说明.md
+
+__pycache__/
+*.pyc
+.temp/
+*.log
