@@ -139,7 +139,11 @@ def update_profile_override(cfg, school_id, changes):
     overrides = dict(updated.get("profile_overrides") or {})
     patch = dict(overrides.get(profile["id"]) or {})
     for key in ("city", "name", "website", "campus_location", "radius"):
-        if key in changes and changes[key] not in (None, ""):
+        if key not in changes or changes[key] is None:
+            continue
+        if key in ("website", "campus_location") and changes[key] == "":
+            patch.pop(key, None)
+        elif changes[key] != "":
             patch[key] = changes[key]
     overrides[profile["id"]] = patch
     updated["profile_overrides"] = overrides

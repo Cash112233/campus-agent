@@ -48,3 +48,24 @@ test('配置保存失败时显示错误并停止连接测试', async () => {
   assert.equal(requests.length, 1);
   assert.match(fields['#cfg-status'].textContent, /保存失败/);
 });
+
+test('切换学校后重新加载学校官网信息', async () => {
+  const fields = {
+    '#school-picker': {value: 'hlj-001'},
+    '#school-status': {className: '', textContent: ''},
+  };
+  let schoolsLoaded = 0;
+  let knowledgeLoaded = 0;
+  const context = vm.createContext({
+    $: id => fields[id],
+    loadSchools: async () => { schoolsLoaded++; },
+    loadKnowledge: async () => { knowledgeLoaded++; },
+    api: async () => ({current: {name: '黑龙江大学'}}),
+  });
+  const match = html.match(/async function selectSchool\(\) \{[\s\S]*?\n\}/);
+  assert.ok(match, 'missing function selectSchool');
+  vm.runInContext(match[0], context);
+  await context.selectSchool();
+  assert.equal(schoolsLoaded, 1);
+  assert.equal(knowledgeLoaded, 1);
+});

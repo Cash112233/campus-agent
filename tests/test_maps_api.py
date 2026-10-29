@@ -78,3 +78,21 @@ class MapsAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.saved[-1]['profile_overrides']['hlby']['website'], 'https://www.byau.edu.cn/')
         self.assertEqual(self.saved[-1]['amap_key'], 'isolated-map-secret')
+
+    def test_school_crawl_imports_into_the_requested_school_and_returns_stats(self):
+        with patch.object(self.main.school_crawler, 'crawl_and_import', return_value={
+            'school_id': 'hlj-001', 'website': 'https://www.hlju.edu.cn/',
+            'visited': 4, 'selected': 2, 'added': 2, 'updated': 0, 'unchanged': 0, 'chunks': 3,
+        }) as crawl:
+            response = self.client.post('/api/schools/hlj-001/crawl', json={'max_pages': 10, 'delay': 0, 'timeout': 5})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['selected'], 2)
+        crawl.assert_called_once()
+        self.assertEqual(crawl.call_args.args[0], 'hlj-001')
+
+    def test_school_crawl_reports_missing_website_without_network_call(self):
+        with patch.object(self.main.school_crawler, 'crawl_and_import', side_effect=ValueError('当前学校尚未配置官网')) as crawl:
+            response = self.client.post('/api/schools/hlj-001/crawl', json={})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('尚未配置官网', response.json()['error'])
+        crawl.assert_called_once()

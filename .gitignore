@@ -7,6 +7,9 @@ backend/__pycache__/
 output/*
 !output/byau_import_rag.py
 !output/byau_crawl_state.json
+!output/hlj_crawl_state.json
+!output/hlj_schools.json
+!output/八一农垦大学部门电话簿.md
 !output/README_部署说明.md
 
 __pycache__/

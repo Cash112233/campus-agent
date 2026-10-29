@@ -149,7 +149,7 @@ class AmapClient:
                 "tags":_text(business.get("tag")),"review_status":"not_provided",
                 "source":"高德地图","source_url":detail_url,"map_url":map_url,"navigation_url":nav_url}
 
-    def search(self, query, scope="nearby", radius=None, sort="distance", limit=5):
+    def search(self, query, scope="nearby", radius=None, sort="distance", limit=5, origin_query=""):
         query = _text(query)
         if not 1 <= len(query) <= 80: raise ValueError("地点关键词应为1—80字。")
         if scope not in ("campus","nearby","city"): raise ValueError("地点范围只能是campus、nearby或city。")
@@ -161,8 +161,26 @@ class AmapClient:
         params = {"keywords":query,"region":self.cfg.get("amap_city",DEFAULT_CITY),"city_limit":"true","page_size":25,"page_num":1}
         origin = None
         try:
-            if scope == "nearby":
+            if origin_query:
+                origin_text = _text(origin_query)
+                if origin_text in ("学校", "校园", "学校中心", "校门"):
+                    origin = self.resolve_campus()
+                else:
+                    origin_rows = self._request("text", {"keywords":origin_text, "region":self.cfg.get("amap_city",DEFAULT_CITY), "city_limit":"true", "page_size":10})
+                    for row in origin_rows:
+                        name = _text(row.get("name")); address = _text(row.get("address"))
+                        try: location = validate_location(row.get("location"))
+                        except ValueError: location = ""
+                        if location and (origin_text in name or origin_text in address):
+                            origin = {"name":name or origin_text,"location":location,"source":"高德地点搜索"}
+                            break
+                    if origin is None:
+                        origin = self.resolve_campus()
+                        origin["requested_name"] = origin_text
+                        origin["fallback"] = True
+            if scope == "nearby" and origin is None:
                 origin = self.resolve_campus()
+            if scope == "nearby":
                 params.update(location=origin["location"],radius=radius,sortrule="distance")
                 rows = self._request("around",params)
             else:
@@ -174,7 +192,9 @@ class AmapClient:
                     rows = [row for row in rows if school in (_text(row.get("name"))+" "+_text(row.get("address")))]
             normalized = [self._normalize(row,origin) for row in rows]
             if sort == "rating": normalized.sort(key=lambda r:float(r["rating"]) if r["rating"] is not None else -1,reverse=True)
-            result = self._result(normalized[:limit], origin, scope=scope, query=query, radius=radius if scope=="nearby" else None, candidate_count=len(normalized))
+            result = self._result(normalized[:limit], origin, scope=scope, query=query, origin_query=_text(origin_query), radius=radius if scope=="nearby" else None, candidate_count=len(normalized))
+            if origin and origin.get("fallback"):
+                result["origin_note"] = f"未能在高德中确认“{origin.get('requested_name','')}”，已回退到学校中心点；请打开高德导航核对起点。"
             if sort == "rating": result["notice"] += "仅在本次高德返回的候选中按评分排序，不代表全城排名；无评分的地点排在后面。"
             if not normalized: result["message"] = "本次未找到匹配地点；不代表该地点不存在，可以换用全称或核对地图收录情况。"
             return result
@@ -202,11 +222,19 @@ def parse_place_request(message):
     if re.search(r"不要|不需要|不用|申请|办理|报销|规定|政策|通知|借阅|借书|招聘",q): return None
     context = re.search(r"高德|校外|校内|学校附近|学校周边|校园里|校园内|附近|周边",q)
     campus_location_question = re.search(r"图书馆|[一二]食堂|教学楼|宿舍楼|校医院|体育馆",q) and re.search(r"在哪|哪里|位置|怎么走|导航",q)
+    route_match = re.search(r"(?:从|由)(.+?)(?:到|去)(.+?)(?:怎么走|如何走|导航|路线|在哪|到达)",q)
     if campus_location_question and not context: context = True
     intent = re.search(r"在哪|哪里|位置|地点|怎么走|导航|找|搜|推荐|评价|评分|口碑|餐馆|饭店|咖啡|奶茶|超市|药店|酒店|宾馆|医院|图书馆|教学楼|食堂|吃什么|有什么",q)
+    if route_match:
+        context = True
+        intent = True
     if not context or not intent: return None
     scope = "campus" if re.search(r"校内|校园里|校园内",q) or (campus_location_question and not re.search(r"校外|附近|周边",q)) else "nearby"
-    if re.search(r"这家|那家|这几个|它的",q): keyword = ""
+    origin_query = ""
+    if route_match:
+        origin_query = route_match.group(1).strip("的从由")
+        keyword = route_match.group(2).strip("的了呢吧")
+    elif re.search(r"这家|那家|这几个|它的",q): keyword = ""
     else:
         keyword = re.sub(r"^(请帮我|帮我|请)?(?:用高德|高德)?(?:查找|查一下|搜索|查|找|搜)?","",q)
         keyword = re.sub(r"学校附近|学校周边|校园里|校园内|校内|校外|附近|周边","",keyword)
@@ -215,6 +243,8 @@ def parse_place_request(message):
         if re.search(r"吃什么|吃啥|好吃的",keyword): keyword="餐饮"
         keyword = keyword.strip("的了呢吧")
     args = {"query":keyword[:80],"scope":scope,"sort":"rating" if re.search(r"评分|评价|口碑",q) else "distance"}
+    if route_match and origin_query:
+        args["origin_query"] = origin_query[:80]
     match = re.search(r"(\d+(?:\.\d+)?)(公里|千米|米)",q)
     if match:
         radius = int(float(match[1])*(1000 if match[2]!="米" else 1))
@@ -239,12 +269,12 @@ def history_context(tool_events):
     return "\n【上次地图检索快照，仅供追问定位，信息可能变化；评分不是评论正文】\n"+json.dumps(facts,ensure_ascii=False) if facts else ""
 
 
-def search_places(query, scope="nearby", radius=None, sort="distance", limit=5, cfg=None, rag=None):
+def search_places(query, scope="nearby", radius=None, sort="distance", limit=5, origin_query="", cfg=None, rag=None):
     cfg = config.load_config() if cfg is None else cfg
     if not _text(query):
         result = {"available":False,"results":[],"message":"请告诉我具体店名或地点名称；也可以点击上次结果的“地点详情”核对。","notice":NOTICE}
     else:
-        result = AmapClient(cfg).search(query,scope,radius,sort,limit)
+        result = AmapClient(cfg).search(query,scope,radius,sort,limit,origin_query=origin_query)
     result["local_references"] = []
     if scope == "campus" and rag is not None:
         result["local_references"] = rag.search(query,top_k=3)
@@ -260,4 +290,6 @@ def format_places(result):
         text = result.get("message","本次未找到匹配地点。")
     if result.get("local_references"):
         text += "\n\n已找到相关校内资料，可展开参考原文核对。地图未收录时，不推断具体坐标和路线。"
+    if result.get("origin_note"):
+        text += "\n\n" + str(result["origin_note"])
     return text

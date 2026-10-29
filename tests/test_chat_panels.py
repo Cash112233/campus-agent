@@ -23,7 +23,7 @@ class ChatPanelTests(unittest.TestCase):
         for p in reversed(self.patches):p.stop()
         self.conn.close()
     def test_explicit_management_requests_open_the_right_inline_card(self):
-        for query,panel in [('办事导航','services'),('查看知识库','knowledge'),('看看你记住了我什么','memory'),('审核学习内容','learning'),('修改设置','settings'),('切换学校','settings'),('学校模板','settings'),('更换学校','settings')]:
+        for query,panel in [('办事导航','services'),('查看知识库','knowledge'),('补充知识库','knowledge'),('完善知识库','knowledge'),('看看你记住了我什么','memory'),('审核学习内容','learning'),('修改设置','settings'),('切换学校','settings'),('学校模板','settings'),('更换学校','settings')]:
             with self.subTest(query=query):self.assertEqual(self.panels.match_panel_request(query),panel)
         for query in ['请假怎么办','知识库里转专业有什么条件','你还记得我在哪个学院吗','中午吃什么']:
             self.assertIsNone(self.panels.match_panel_request(query))

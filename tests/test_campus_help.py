@@ -41,6 +41,25 @@ class CampusHelpTests(unittest.TestCase):
         self.assertEqual(hits[0]["title"], "校园卡补办指南")
         self.assertEqual(hits[0].get("source_url"), "https://www.byau.edu.cn/example/page.htm")
         self.assertTrue(hits[0].get("indexed_at"))
+
+    def test_retrieval_supports_more_campus_life_aliases(self):
+        self.add("校园网故障处理", "校园网账号登录、网络故障报修和 VPN 使用说明请查看信息化服务入口。")
+        hits = self.rag.search("VPN连不上怎么办")
+        self.assertTrue(hits)
+        self.assertEqual(hits[0]["title"], "校园网故障处理")
+
+    def test_empty_search_returns_actionable_coverage_guidance(self):
+        import tools
+        previous = tools._ctx.copy()
+        try:
+            tools.set_context(self.rag, None)
+            result = tools.run_tool("search_knowledge", {"query": "医保报销怎么办"})
+        finally:
+            tools._ctx.update(previous)
+        self.assertEqual(result["results"], [])
+        self.assertIn("资料", result["message"])
+        self.assertTrue(result["next_steps"])
+        self.assertIn("官方", " ".join(result["next_steps"]))
     def test_title_match_ranks_the_actual_statute_first(self):
         self.add("高等学校章程制定办法", "制定章程的程序和章程管理的规定。")
         self.add("学校章程", "第一章：本校的办学宗旨与组织机构。")
@@ -85,6 +104,66 @@ class CampusHelpTests(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["phone"], "6819092")
 
+    def test_official_phonebook_content_supplies_college_contacts(self):
+        import services
+        self.conn.execute(
+            'INSERT INTO knowledge(title,source,content,ktype,school_id,created_at) VALUES(?,?,?,?,?,?)',
+            ('八一农垦大学部门电话簿', '电话簿:output/八一农垦大学部门电话簿.md',
+             '数据来源：学校官网「电话查询」页 https://www.byau.edu.cn/921/list.htm\n'
+             '### 生命科学技术学院\n| 职务 | 电话 | 地址 |\n|---|---|---|\n'
+             '| 院长兼党委副书记 | 6819290 | 基础教学实验楼125 |',
+             '电话簿', 'hlby', '2026-10-25')
+        )
+        self.conn.commit()
+        with patch('services.get_conn', return_value=self.conn):
+            rows = services.list_contacts('生命科学技术学院院长')
+        self.assertEqual(rows[0]['phone'], '6819290')
+        self.assertEqual(rows[0]['address'], '基础教学实验楼125')
+
+    def test_contact_search_accepts_role_prefixes_in_phonebook(self):
+        import services
+        self.conn.execute(
+            'INSERT INTO knowledge(title,source,content,ktype,school_id,created_at) VALUES(?,?,?,?,?,?)',
+            ('八一农垦大学部门电话簿', '电话簿:output/八一农垦大学部门电话簿.md',
+             '数据来源：学校官网 https://www.byau.edu.cn/921/list.htm\n'
+             '### 土木水利学院\n| 职务 | 电话 | 地址 |\n|---|---|---|\n'
+             '| 副处级辅导员 | 6819907 | 土木水利学院312 |',
+             '电话簿', 'hlby', '2026-10-25')
+        )
+        self.conn.commit()
+        with patch('services.get_conn', return_value=self.conn):
+            rows = services.list_contacts('土木水利学院辅导员')
+        self.assertEqual(rows[0]['phone'], '6819907')
+
+    def test_college_contact_search_does_not_match_a_name_suffix(self):
+        import services
+        self.conn.execute(
+            'INSERT INTO knowledge(title,source,content,ktype,school_id,created_at) VALUES(?,?,?,?,?,?)',
+            ('八一农垦大学部门电话簿', '电话簿:output/八一农垦大学部门电话簿.md',
+             '数据来源：学校官网 https://www.byau.edu.cn/921/list.htm\n'
+             '### 经济管理学院\n| 职务 | 电话 | 地址 |\n|---|---|---|\n'
+             '| 综合办公室 | 6819258 | 经管楼348 |\n'
+             '### 理学院\n| 职务 | 电话 | 地址 |\n|---|---|---|\n'
+             '| 综合办公室 | 6819330 | 基础教学实验楼611 |',
+             '电话簿', 'hlby', '2026-10-25')
+        )
+        self.conn.commit()
+        with patch('services.get_conn', return_value=self.conn):
+            rows = services.list_contacts('理学院综合办公室')
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['phone'], '6819330')
+
+    def test_missing_contact_result_explains_how_to_narrow_the_search(self):
+        import tools
+        previous = tools._ctx.copy()
+        try:
+            tools.set_context(self.rag, None)
+            result = tools.run_tool("find_campus_contact", {"query": "不存在的部门"})
+        finally:
+            tools._ctx.update(previous)
+        self.assertEqual(result["results"], [])
+        self.assertTrue(result["next_steps"])
+
     def test_college_names_are_not_matched_as_other_colleges_substrings(self):
         self.add("经济管理学院学生请假申请规定", "学生通过门户提出请假申请并提交材料。")
         self.assertEqual(self.rag.search("理学院请假流程"), [])
@@ -103,6 +182,11 @@ class CampusHelpTests(unittest.TestCase):
         from retrieval_rules import source_meta
         meta = source_meta({"source": "官网:https://nic.byau.edu.cn/190/list.htm", "ktype": "官网爬取", "indexed_at": "2026-10-26"}, "资料采集时间：2026-10-26\n门户帮助正文")
         self.assertIsNone(meta["published_at"])
+
+    def test_any_school_official_url_is_labeled_as_official_source(self):
+        from retrieval_rules import source_meta
+        meta = source_meta({"source": "官网:https://www.hlju.edu.cn/notice.htm", "ktype": "官网爬取", "indexed_at": "2026-10-26"}, "学校通知正文")
+        self.assertEqual(meta["source_kind"], "学校官网资料")
 
     def test_db_migrates_old_message_table_without_losing_history(self):
         self.conn.execute("DROP TABLE messages")

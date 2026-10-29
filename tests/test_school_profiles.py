@@ -41,6 +41,11 @@ class SchoolProfileTests(unittest.TestCase):
         self.assertEqual(profile["campus_location"], "125.168208,46.587304")
         self.assertEqual(profile["radius"], 4200)
 
+    def test_empty_website_clears_an_old_school_override(self):
+        cfg = {**config.DEFAULT_CONFIG, "profile_overrides": {"hlj-001": {"website": "https://old.example.edu.cn/"}}}
+        updated = campus_profiles.update_profile_override(cfg, "hlj-001", {"website": ""})
+        self.assertEqual(campus_profiles.get_profile("hlj-001", updated)["website"], "")
+
     def test_knowledge_retrieval_is_scoped_to_current_school(self):
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row

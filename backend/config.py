@@ -5,7 +5,7 @@ import os
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
 DEFAULT_CONFIG = {
-    "api_key": "",                        # DeepSeek API Key，在对话设置卡片填写
+    "api_key": "",                        # DeepSeek API Key，由服务端配置
     "current_school_id": "hlby",         # 当前学校模板；知识库和地图按学校隔离
     "custom_profiles": [],                # 用户新增学校配置，不含密钥
     "profile_overrides": {},              # 学校补充的官网/坐标/半径配置
@@ -14,6 +14,9 @@ DEFAULT_CONFIG = {
     "amap_campus_name": "黑龙江八一农垦大学",
     "amap_campus_location": "",            # 留空时用高德校名精确匹配，不预置猜测坐标
     "amap_radius": 3000,
+    "dreamspace_web_token": "",          # 可选：到梦空间登录会话令牌，仅服务端使用，不进入聊天记录
+    "tavily_api_key": "",                 # Tavily 联网搜索 Key，仅服务端使用
+    "web_search_default_days": 7,          # 联网搜索默认时间窗口（天）
     "base_url": "https://api.deepseek.com",
     "model": "deepseek-flash",            # deepseek-flash / deepseek-v4-pro
     "temperature": 0.7,
@@ -36,6 +39,19 @@ def load_config():
                 cfg.update(json.load(f))
         except Exception:
             pass
+    # 云端部署：环境变量优先（Render 等平台注入，敏感信息不落盘）
+    _env = {
+        "api_key": "DEEPSEEK_API_KEY",
+        "access_token": "ACCESS_TOKEN",
+        "amap_key": "AMAP_KEY",
+        "tavily_api_key": "TAVILY_API_KEY",
+        "current_school_id": "SCHOOL_ID",
+        "lock_config": "LOCK_CONFIG",
+    }
+    for key, env in _env.items():
+        val = os.environ.get(env)
+        if val:
+            cfg[key] = val.lower() in ("1", "true", "yes") if key == "lock_config" else val
     return cfg
 
 

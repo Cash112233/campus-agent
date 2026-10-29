@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>鹈鹕骑自行车 · SVG 2D 动画</title>
+  <style>
+    :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; overflow: hidden; background: linear-gradient(180deg, #a8e8ff 0%, #d9f6ff 60%, #86d39d 60%, #5db579 100%); }
+    .stage { width: min(1100px, 96vw); aspect-ratio: 16 / 9; position: relative; overflow: hidden; border: 3px solid rgba(17,68,83,.18); border-radius: 28px; background: linear-gradient(#a8e8ff 0 59%, #8bd99f 59% 100%); box-shadow: 0 24px 70px rgba(28,86,96,.25); }
+    svg { width: 100%; height: 100%; display: block; }
+    .title { position: absolute; left: 28px; top: 22px; color: #165267; font-weight: 800; letter-spacing: .08em; font-size: clamp(15px,2vw,25px); }
+    .hint { position: absolute; right: 28px; bottom: 20px; color: rgba(22,82,103,.72); font-size: 13px; }
+    .cloud { animation: drift 18s linear infinite; } .cloud.slow { animation-duration: 28s; animation-delay: -8s; }
+    .tree { transform-origin: center bottom; animation: sway 2.8s ease-in-out infinite; } .tree:nth-child(2n) { animation-delay: -.9s; animation-duration: 3.3s; }
+    .road-mark { animation: road 1.6s linear infinite; } .road-mark.delay { animation-delay: -.8s; }
+    .bike { animation: ride 1.15s ease-in-out infinite; transform-origin: 50% 75%; }
+    .wheel { transform-box: fill-box; transform-origin: center; animation: spin .9s linear infinite; }
+    .wing { transform-box: fill-box; transform-origin: 18% 82%; animation: flap 1.15s ease-in-out infinite; }
+    .leg { transform-box: fill-box; transform-origin: 50% 8%; animation: pedal 1.15s linear infinite; } .leg.back { animation-delay: -.575s; }
+    .foot { transform-box: fill-box; transform-origin: 50% 50%; animation: pedal-foot 1.15s linear infinite; } .foot.back { animation-delay: -.575s; }
+    .beak { transform-box: fill-box; transform-origin: 0 50%; animation: bob 1.15s ease-in-out infinite; }
+    @keyframes drift { from { transform: translateX(-28%); } to { transform: translateX(130%); } }
+    @keyframes sway { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+    @keyframes road { from { transform: translateX(0); } to { transform: translateX(-190px); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes ride { 0%,100% { transform: translateY(0) rotate(-.5deg); } 50% { transform: translateY(-4px) rotate(.5deg); } }
+    @keyframes flap { 0%,100% { transform: rotate(4deg); } 50% { transform: rotate(-13deg); } }
+    @keyframes pedal { to { transform: rotate(360deg); } } @keyframes pedal-foot { to { transform: rotate(-360deg); } }
+    @keyframes bob { 0%,100% { transform: rotate(0); } 50% { transform: rotate(-3deg); } }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; } }
+  </style>
+</head>
+<body>
+  <main class="stage" aria-label="鹈鹕骑自行车的 SVG 2D 动画">
+    <div class="title">鹈鹕的春日骑行</div><div class="hint">SVG · CSS 2D Animation</div>
+    <svg viewBox="0 0 1100 620" role="img" aria-labelledby="scene-title scene-desc">
+      <title id="scene-title">一只鹈鹕骑着自行车</title><desc id="scene-desc">鹈鹕在草地旁的道路上踩着自行车前进，车轮、翅膀、脚踏板和云朵会循环动画。</desc>
+      <defs>
+        <linearGradient id="road" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#536b70"/><stop offset="1" stop-color="#354d53"/></linearGradient>
+        <linearGradient id="feather" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f8fbf5"/><stop offset="1" stop-color="#d5e7e3"/></linearGradient>
+        <linearGradient id="beak" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffc85a"/><stop offset="1" stop-color="#e7873f"/></linearGradient>
+        <filter id="shadow" x="-20%" y="-30%" width="140%" height="180%"><feGaussianBlur stdDeviation="8"/></filter>
+      </defs>
+      <g class="cloud" opacity=".72" fill="#fff"><ellipse cx="135" cy="130" rx="72" ry="22"/><ellipse cx="90" cy="133" rx="30" ry="28"/><ellipse cx="145" cy="116" rx="38" ry="34"/><ellipse cx="192" cy="134" rx="35" ry="24"/></g>
+      <g class="cloud slow" opacity=".52" fill="#fff"><ellipse cx="790" cy="105" rx="80" ry="22"/><ellipse cx="735" cy="106" rx="33" ry="27"/><ellipse cx="790" cy="89" rx="38" ry="33"/><ellipse cx="850" cy="108" rx="40" ry="25"/></g>
+      <circle cx="925" cy="98" r="44" fill="#ffe27b" opacity=".9"/>
+      <path d="M0 355 Q150 245 285 350 T560 332 T850 348 T1100 315 V420 H0Z" fill="#74c78f" opacity=".8"/><path d="M0 386 Q170 300 330 390 T650 365 T930 385 T1100 350 V450 H0Z" fill="#56ae79" opacity=".72"/>
+      <path d="M0 440 Q330 408 590 445 T1100 430 V620 H0Z" fill="url(#road)"/>
+      <g fill="#f8eab1" opacity=".86"><rect class="road-mark" x="-90" y="523" width="130" height="10" rx="5"/><rect class="road-mark" x="205" y="514" width="130" height="10" rx="5"/><rect class="road-mark" x="500" y="525" width="130" height="10" rx="5"/><rect class="road-mark" x="795" y="513" width="130" height="10" rx="5"/><rect class="road-mark delay" x="55" y="583" width="110" height="8" rx="4"/><rect class="road-mark delay" x="350" y="578" width="110" height="8" rx="4"/><rect class="road-mark delay" x="645" y="588" width="110" height="8" rx="4"/><rect class="road-mark delay" x="940" y="578" width="110" height="8" rx="4"/></g>
+      <g transform="translate(86 320)"><g class="tree"><rect x="-8" y="36" width="16" height="83" rx="8" fill="#8c5c3e"/><circle cy="18" r="42" fill="#2e9b68"/><circle cx="-27" cy="37" r="27" fill="#43b878"/><circle cx="27" cy="37" r="27" fill="#23865d"/></g></g>
+      <g transform="translate(980 302)"><g class="tree"><rect x="-8" y="36" width="16" height="94" rx="8" fill="#8c5c3e"/><circle cy="18" r="44" fill="#2e9b68"/><circle cx="-27" cy="37" r="28" fill="#43b878"/><circle cx="27" cy="37" r="28" fill="#23865d"/></g></g>
+      <g transform="translate(1025 408) scale(.65)"><g class="tree"><rect x="-8" y="36" width="16" height="94" rx="8" fill="#8c5c3e"/><circle cy="18" r="44" fill="#2e9b68"/><circle cx="-27" cy="37" r="28" fill="#43b878"/><circle cx="27" cy="37" r="28" fill="#23865d"/></g></g>
+      <g transform="translate(550 80)"><g class="bike">
+        <ellipse cx="0" cy="445" rx="185" ry="18" fill="#132f37" opacity=".22" filter="url(#shadow)"/>
+        <g fill="none" stroke="#1d6574" stroke-width="8"><circle class="wheel" cx="-118" cy="390" r="74"/><circle class="wheel" cx="128" cy="390" r="74"/><path d="M-118 390 L-35 300 L128 390 L-18 390 Z M-35 300 L16 391 M-18 390 L-2 276 L52 276"/><path d="M-2 276 L28 252 L80 252" stroke-linecap="round"/></g>
+        <g fill="none" stroke="#90d5d4" stroke-width="2" opacity=".9"><path d="M-118 316v148M-192 390h148M-170 338l104 104M-170 442l104-104"/><path d="M128 316v148M54 390h148M76 338l104 104M76 442l104-104"/></g>
+        <circle cx="-18" cy="390" r="18" fill="#f3b44e" stroke="#1d6574" stroke-width="6"/>
+        <g class="leg" stroke="#d88c51" stroke-width="12" stroke-linecap="round" fill="none"><path d="M-5 246 Q-34 292 -18 387"/></g><g class="leg back" stroke="#be7149" stroke-width="10" stroke-linecap="round" fill="none"><path d="M-3 246 Q42 292 2 387"/></g>
+        <g class="foot" fill="#efad46" stroke="#b8693f" stroke-width="4"><ellipse cx="-8" cy="394" rx="25" ry="9"/></g><g class="foot back" fill="#efad46" stroke="#b8693f" stroke-width="4"><ellipse cx="15" cy="382" rx="24" ry="9"/></g>
+        <ellipse cx="-5" cy="205" rx="92" ry="112" fill="url(#feather)" stroke="#6a9aa0" stroke-width="5"/>
+        <path class="wing" d="M-40 151 Q-120 173 -105 273 Q-85 309 -33 275 Q-12 226 -40 151Z" fill="#b6d5d4" stroke="#6a9aa0" stroke-width="5"/><path d="M-77 198 Q-45 220 -45 275 M-66 184 Q-32 205 -34 256" fill="none" stroke="#8cbabb" stroke-width="5" stroke-linecap="round"/>
+        <path d="M-5 114 Q-2 65 31 35" fill="none" stroke="#6a9aa0" stroke-width="18" stroke-linecap="round"/><circle cx="38" cy="29" r="52" fill="url(#feather)" stroke="#6a9aa0" stroke-width="5"/>
+        <path class="beak" d="M70 37 Q171 42 184 64 Q173 83 91 78 Q70 72 70 37Z" fill="url(#beak)" stroke="#b56b3b" stroke-width="5"/><path d="M84 76 Q125 96 167 72" fill="none" stroke="#cb7041" stroke-width="4"/><circle cx="55" cy="19" r="8" fill="#183b47"/><circle cx="58" cy="16" r="3" fill="#fff"/>
+        <path d="M3 112 Q26 132 51 120" fill="none" stroke="#6a9aa0" stroke-width="5" stroke-linecap="round"/><path d="M8 111 Q38 128 64 110 L58 133 Q35 151 2 129Z" fill="#ee7562" stroke="#b94e4e" stroke-width="4"/><path d="M49 128 L88 169 L55 160Z" fill="#ee7562" stroke="#b94e4e" stroke-width="4"/>
+        <path d="M52 252 Q66 226 80 252" fill="none" stroke="#1d6574" stroke-width="7" stroke-linecap="round"/><path d="M52 244 Q67 223 75 244" fill="none" stroke="#d5e7e3" stroke-width="13" stroke-linecap="round"/>
+      </g></g>
+    </svg>
+  </main>
+</body>
+</html>

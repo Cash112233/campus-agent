@@ -95,3 +95,13 @@ class DiningTests(unittest.TestCase):
         self.assertIn('recommend_campus_food',{row['function']['name'] for row in tools.TOOL_SCHEMAS})
         result=tools.run_tool('recommend_campus_food',{'query':'中午吃什么'})
         self.assertIn(result['count'],[3,4,5])
+
+    def test_food_recommendations_do_not_leak_another_school_menu(self):
+        self.conn.execute(
+            'INSERT INTO knowledge(title,content,ktype,source,school_id,created_at) VALUES(?,?,?,?,?,?)',
+            ('[食堂] 外校食堂一楼 / 1. 外校套餐', '| 菜品 | 价格 |\n|---|---|\n| 外校套餐 | 10 |', '食堂资料', '用户提供:外校菜单.md', 'hlj-001', '2026-10-27'),
+        )
+        self.conn.commit()
+        with patch.object(self.d, '_active_school_id', return_value='hlby'):
+            result = self.d.recommend_food('中午吃什么', rng=random.Random(2))
+        self.assertTrue(all('外校' not in row['dish'] for row in result['results']))

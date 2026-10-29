@@ -31,6 +31,10 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:18px
 #key-dot .dot{width:8px;height:8px;border-radius:50%;background:#d1d5db}
 #key-dot.ok .dot{background:var(--green)}
 #key-dot.ok{color:var(--green)}
+#account-user{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+#account-user .account-name{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#account-user button{padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;background:#fff}
+#account-user button:hover{color:var(--primary-dark);border-color:#bfdbfe;background:var(--primary-light)}
 
 main{max-width:1080px;margin:0 auto;padding:18px 20px 60px}
 .page{display:none}
@@ -197,6 +201,20 @@ body.dark .sked .sk-title{color:#dbe7f7}
 .filter-tabs{display:flex;gap:6px;margin:0 0 12px}
 .filter-tabs button{padding:4px 14px;border-radius:16px;font-size:12.5px;color:var(--muted);background:#fff;border:1px solid var(--border)}
 .filter-tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.study-card{margin:14px 0}
+.study-card h3{margin-bottom:6px}
+.study-materials{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:230px;overflow:auto;margin:10px 0}
+.study-material{display:flex;gap:8px;align-items:start;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);font-size:13px;cursor:pointer}
+.study-material:hover{border-color:var(--primary);background:var(--primary-light)}
+.study-material small{display:block;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.study-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+.study-controls input[type="number"]{width:90px;min-height:38px;margin:0}
+.study-upload{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.study-result{margin-top:14px}
+.study-point,.study-question{border-top:1px solid var(--border);padding:10px 0}
+.study-point strong,.study-question strong{display:block;margin-bottom:4px}
+.study-question details{margin-top:7px;color:var(--muted);font-size:13px}
+@media(max-width:620px){.study-materials{grid-template-columns:minmax(0,1fr)}}
 
 /* ===== 弹窗 & 提示 ===== */
 .modal-wrap{position:fixed;inset:0;background:rgba(30,41,59,.25);backdrop-filter:blur(3px);
@@ -288,6 +306,13 @@ body.dark .typing i{background:#5b7db1}
 .service-detail h3{font-size:21px;margin-bottom:10px}
 .service-detail h4{margin:18px 0 8px;font-size:16px}
 .service-detail .btn,.contacts-panel .btn{min-height:44px}
+.colleges-panel{margin-top:24px}
+.colleges-panel h3{margin-bottom:6px}
+.college-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.college-card{min-height:48px;padding:10px 12px;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);transition:background .15s,border-color .15s}
+.college-card:hover,.college-card[aria-pressed="true"]{border-color:var(--primary);background:var(--primary-light)}
+.college-card strong{font-size:14px}
+.college-detail{margin-top:14px;min-height:80px;overflow-wrap:anywhere}
 .service-note{padding:12px;border-left:3px solid var(--primary);background:var(--primary-light);font-size:14px;margin:12px 0}
 .service-gap{color:var(--muted);font-size:14px;margin:10px 0}
 .contact-item{padding:12px 0;border-top:1px solid var(--border);overflow-wrap:anywhere}
@@ -312,6 +337,7 @@ body.dark .service-card:hover,body.dark .service-card[aria-pressed="true"]{backg
  main{padding:16px 12px 40px}
  .service-layout{grid-template-columns:minmax(0,1fr)}
  .contacts-grid{grid-template-columns:minmax(0,1fr)}
+ .college-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:380px){.service-grid{grid-template-columns:minmax(0,1fr)}}
 
@@ -354,14 +380,206 @@ body.dark .service-card:hover,body.dark .service-card[aria-pressed="true"]{backg
  .msg.has-panel .avatar{display:none}
  .chat-panel-body .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* ===== DeepSeek 风格对话工作区 =====
+   保留原有对话和操作卡片，只调整信息层级、留白和交互反馈。 */
+:root{
+  --primary:#4d6bfe;
+  --primary-dark:#3f56d8;
+  --primary-light:#edf2ff;
+  --bg:#f7f8fa;
+  --card:#ffffff;
+  --border:#e6e8ec;
+  --text:#1f2329;
+  --muted:#7a808a;
+  --ink:#172033;
+  --shadow-soft:0 8px 28px rgba(31,35,41,.06);
+  --shadow-focus:0 0 0 3px rgba(77,107,254,.14);
+  --radius-lg:16px;
+  --radius-md:12px;
+}
+html{background:var(--bg)}
+body{
+  min-height:100dvh;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  font-size:14px;
+}
+button,input,textarea,select{touch-action:manipulation}
+button{transition:background-color .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease,opacity .18s ease}
+header{
+  height:60px;
+  padding:0 28px;
+  gap:14px;
+  background:rgba(255,255,255,.88);
+  border-bottom:1px solid #eceef2;
+  box-shadow:0 1px 0 rgba(31,35,41,.02);
+}
+.logo{gap:10px;font-size:16px;color:#263fbd}
+.logo-mark{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9px;background:#edf2ff;color:#4d6bfe}
+.logo-mark svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.logo .name{font-family:inherit;letter-spacing:0;font-weight:700}
+.logo .badge{color:#8a919d;border-color:#e1e4ea;border-radius:999px;padding:2px 8px;font-size:10px;letter-spacing:.3px;background:#fafbfc}
+#key-dot{padding:5px 9px;border:1px solid #e8ebf0;border-radius:999px;background:#fff;font-size:11px}
+#key-dot .dot{width:7px;height:7px}
+#theme-btn{width:36px;height:36px;margin-left:auto;padding:0;border-radius:10px;color:#656d78;font-size:16px}
+#theme-btn:hover{background:#f0f2f5;color:#303640}
+main{max-width:1280px;padding:18px 24px 28px}
+.chat-wrap{gap:24px;height:calc(100dvh - 88px);min-height:560px}
+.conv-side{width:248px;padding:8px;gap:10px;background:#f2f4f7;border:1px solid #e9ebef;border-radius:var(--radius-lg)}
+.conv-side .newbtn{min-height:44px;justify-content:center;border:1px solid #dfe4ee;background:#fff;color:#39465c;box-shadow:0 2px 8px rgba(31,35,41,.03)}
+.conv-side .newbtn:hover{border-color:#c9d3ee;background:#fafbff;color:var(--primary-dark)}
+#conv-list{gap:3px;padding:2px}
+.conv-item{padding:11px 12px;border-radius:10px;color:#4b5360}
+.conv-item:hover{background:#e8edf8}
+.conv-item.active{background:#e5ebff;border-color:transparent;color:#263fbd}
+.conv-item .t{font-weight:600}
+.conv-item .d{font-size:11px;color:#969da8;margin-top:2px}
+.conv-item .del{padding:0 2px;color:#c4c9d1}
+.chat-main{border:1px solid #e5e7eb;border-radius:var(--radius-lg);background:#fff;box-shadow:var(--shadow-soft)}
+.chat-head{min-height:58px;padding:10px 18px;background:#fff;border-bottom:1px solid #f0f1f3}
+.chat-head .title{font-size:14px;color:#303640;font-weight:650}
+.chat-head .btn{min-height:34px}
+#chat-box{padding:26px clamp(18px,5vw,68px) 32px;gap:22px;background:#fff;scroll-behavior:smooth}
+.msg{max-width:min(820px,92%);gap:11px}
+.msg.user{max-width:min(760px,88%)}
+.avatar{width:30px;height:30px;border-radius:9px;font-size:14px}
+.msg.assistant .avatar{background:#eef2ff;color:#4d6bfe}
+.msg.user .avatar{background:#e8ecf3;color:#546171}
+.bubble-wrap{gap:7px}
+.bubble{padding:11px 15px;border-radius:15px;background:#4d6bfe;color:#fff;line-height:1.72}
+.msg.user .bubble{border-bottom-right-radius:5px;box-shadow:0 4px 12px rgba(77,107,254,.12)}
+.msg.assistant .bubble{padding:1px 0;background:transparent;border:0;color:#252a33;line-height:1.78}
+.msg.assistant .bubble code{background:#f1f3f6;color:#a03791}
+.fb{opacity:.8}
+.fb button{min-width:32px;min-height:30px}
+.fb button:hover{background:#f3f5f7}
+.tool-blk{border:1px solid #e8ebf0;border-radius:10px;background:#fafbfc}
+.tool-blk summary{min-height:36px;padding:7px 11px;color:#657080}
+.tool-blk pre{background:#f3f5f7;color:#3f4753}
+.chat-input{gap:10px;padding:14px 18px 18px;border-top:0;background:#fff}
+#msg-input{min-height:46px;padding:11px 14px;border:1px solid #dfe3e9;border-radius:14px;background:#fff;box-shadow:0 4px 18px rgba(31,35,41,.04);line-height:1.55}
+#msg-input:focus{border-color:#9eb0ff;box-shadow:var(--shadow-focus)}
+#send-btn{min-height:46px;padding:10px 22px;border-radius:12px;background:#4d6bfe}
+#send-btn:hover{background:#3f56d8;box-shadow:0 5px 14px rgba(77,107,254,.18)}
+#voice-btn{width:44px;height:44px;border-radius:12px;background:#f1f3f6;color:#697382}
+#voice-btn:hover{background:#e9edf3;color:#3f56d8}
+.welcome{max-width:780px;padding:50px 10px 34px;gap:32px}
+.welcome h3{font-family:inherit;font-size:25px;letter-spacing:0;color:#202630}
+.welcome .hello .sub{font-size:13.5px;line-height:1.7}
+.welcome .ex{padding:8px 14px;border-radius:10px;background:#fff;color:#4e5968;border-color:#e3e7ed}
+.welcome .ex{font-size:12.5px;cursor:pointer;line-height:1.45}
+.welcome .ex:hover{border-color:#a9b8ef;background:#f5f7ff;color:#3f56d8}
+.module-entry-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0 14px;text-align:left}
+.module-entry{display:flex;align-items:center;gap:11px;min-height:72px;padding:13px 14px;border:1px solid #e2e6ed;border-radius:14px;background:#fff;color:#303744;text-align:left;box-shadow:0 3px 12px rgba(31,35,41,.035)}
+.module-entry:hover{border-color:#a9b8ef;background:#f7f8ff;box-shadow:0 6px 16px rgba(77,107,254,.1)}
+.module-entry:active{box-shadow:0 2px 7px rgba(77,107,254,.08)}
+.module-entry-icon{display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex:0 0 34px;border-radius:10px;background:#edf2ff;color:#4d6bfe;font-size:21px;font-weight:700}
+.module-entry.life .module-entry-icon{background:#eef8f5;color:#159b78}
+.module-entry strong,.module-entry small{display:block}
+.module-entry strong{font-size:14px;margin-bottom:2px}
+.module-entry small{font-size:11.5px;line-height:1.5;color:#7a808a;font-weight:400}
+.module-panel-title{font-size:23px;margin:0 0 4px;color:var(--text);letter-spacing:-.2px}
+.guide-card{margin:18px 0 20px;padding:16px 18px;border:1px solid #dfe5fb;border-radius:16px;background:linear-gradient(135deg,#f8faff 0%,#eef3ff 100%);text-align:left}
+.guide-card-head{display:flex;align-items:flex-start;gap:11px;margin-bottom:12px}
+.guide-card-icon{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex:0 0 36px;border-radius:12px;background:#4d6bfe;color:#fff;font-size:20px;box-shadow:0 5px 12px rgba(77,107,254,.2)}
+.guide-card h3{margin:0 0 2px;font-size:16px;color:#273b9d}
+.guide-card p{font-size:12.5px;line-height:1.65;color:#68738a}
+.guide-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:9px;align-items:end}
+.guide-grid label{font-size:12px;color:#6f7890;font-weight:600}
+.guide-grid .inp{margin-top:5px;min-height:42px;background:#fff}
+.guide-grid .btn{min-height:42px;white-space:nowrap}
+.guide-examples{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+.guide-example{padding:5px 10px;border:1px solid #d9e1fa;border-radius:999px;background:rgba(255,255,255,.68);color:#4d61b5;font-size:11.5px;cursor:pointer}
+.guide-example:hover{background:#fff;border-color:#9eb0ff;color:#3f56d8}
+.guide-hint{margin-top:10px;font-size:11px;color:#778196}
+.route-summary{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:10px 0;padding:10px 12px;border:1px solid #dfe5fb;border-radius:11px;background:#f8faff;color:#4c5872;font-size:12.5px}
+.route-summary-icon{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:#edf2ff;color:#4d6bfe;font-size:16px}
+.route-summary .tag{margin-left:auto}
+.map-warning{padding:7px 10px;border-left:3px solid #f59e0b;background:#fffbeb;border-radius:0 7px 7px 0}
+body.dark .guide-card{border-color:#354579;background:linear-gradient(135deg,#1d2743 0%,#202b4f 100%)}
+body.dark .guide-card h3{color:#cbd5ff}
+body.dark .guide-card p,body.dark .guide-hint{color:#aeb8d0}
+body.dark .guide-grid .inp{background:#141922}
+body.dark .guide-example{border-color:#43558e;background:#242f50;color:#c4ceff}
+body.dark .route-summary{border-color:#354579;background:#1c2744;color:#c4cde3}
+body.dark .route-summary-icon{background:#26345d;color:#aebcff}
+body.dark .map-warning{background:#3b321b;border-left-color:#fbbf24}
+.sked{border-radius:15px;box-shadow:0 8px 24px rgba(31,35,41,.06)}
+.card,.chat-panel,.place-card,.learn-item,.stat,.service-card,.source-refs{border-color:#e7e9ee;border-radius:var(--radius-md)}
+.card{box-shadow:0 2px 8px rgba(31,35,41,.025)}
+.btn{min-height:40px;border-radius:10px;background:#4d6bfe}
+.btn:hover{background:#3f56d8}
+.btn.ghost{background:#f1f3f6;color:#4e5968}
+.btn.ghost:hover{background:#e5eaf5;color:#3f56d8}
+.inp{min-height:40px;border-color:#dfe3e9;border-radius:10px;background:#fff}
+.inp:focus{border-color:#9eb0ff;box-shadow:var(--shadow-focus)}
+.chat-panel{box-shadow:none;background:#fff}
+.chat-panel-head{padding:12px 14px;background:#fbfcfd}
+.chat-panel-body{padding:16px}
+.services-view h2{font-size:23px;letter-spacing:-.2px}
+.services-intro{font-size:14px;line-height:1.75}
+.modal{border:1px solid #e4e7ec;border-radius:16px;box-shadow:0 18px 50px rgba(31,35,41,.16)}
+#toast{border-radius:12px;box-shadow:0 8px 20px rgba(31,35,41,.16)}
+body.dark{--primary:#7c92ff;--primary-dark:#9aabff;--primary-light:#202b4f;--bg:#11151d;--card:#181d27;--border:#2c3442;--text:#edf1f7;--muted:#a0a9b8;--ink:#f3f5fb}
+body.dark header{background:rgba(17,21,29,.92);border-bottom-color:#252c38}
+body.dark .conv-side{background:#151a23;border-color:#28303d}
+body.dark .conv-side .newbtn{background:#1b222e;border-color:#303a4a;color:#d9e0eb}
+body.dark .conv-item{color:#c2cad6}
+body.dark .conv-item:hover{background:#202a3c}
+body.dark .conv-item.active{background:#26345d;color:#dbe2ff}
+body.dark .chat-main,body.dark .chat-head,body.dark #chat-box,body.dark .chat-input{background:#181d27}
+body.dark .chat-main{border-color:#2c3442}
+body.dark .chat-head{border-bottom-color:#252c38}
+body.dark .msg.assistant .bubble{color:#e7ebf3}
+body.dark #msg-input{background:#141922;border-color:#364052;color:#edf1f7}
+body.dark .btn.ghost{background:#242c3a;color:#d7deea}
+body.dark .btn.ghost:hover{background:#303b51;color:#fff}
+body.dark #voice-btn{background:#242c3a;color:#cbd4e2}
+body.dark .card,body.dark .chat-panel,body.dark .place-card,body.dark .learn-item,body.dark .stat,body.dark .service-card{box-shadow:none}
+body.dark .module-entry{background:#1b222e;border-color:#303a4a;color:#e7ebf3;box-shadow:none}
+body.dark .module-entry:hover{background:#202a3c;border-color:#566da9}
+body.dark .module-entry small{color:#a0a9b8}
+body.dark .logo .badge,body.dark #key-dot{background:#1b222e;border-color:#303a4a}
+body.dark .logo-mark{background:#26345d;color:#aebcff}
+@media(max-width:860px){
+  main{padding:14px 14px 22px}
+  .chat-wrap{gap:12px;height:calc(100dvh - 82px);min-height:500px}
+  .conv-side{width:100%;padding:6px;max-height:142px;border-radius:14px}
+  .conv-side .newbtn{min-height:40px}
+  #conv-list{display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden}
+  .conv-item{min-width:180px}
+  #chat-box{padding:22px 16px 28px}
+}
+@media(max-width:640px){
+  header{height:54px;padding:0 14px}
+  #key-dot{padding:4px 7px}
+  #key-dot #key-text{display:none}
+  main{padding:10px 8px 16px}
+  .chat-wrap{height:calc(100dvh - 72px);min-height:0}
+  .chat-main{border-radius:14px}
+  .chat-head{padding:8px 12px}
+  .chat-head .btn{padding:5px 8px;font-size:11px}
+  #chat-box{padding:20px 12px 24px;gap:18px}
+  .msg,.msg.user{max-width:96%}
+  .chat-input{padding:10px 10px 12px;gap:7px}
+  #msg-input{min-height:44px}
+  #send-btn{min-height:44px;padding:8px 14px}
+  .module-entry-grid{grid-template-columns:minmax(0,1fr);margin-top:14px}
+  .module-entry{min-height:64px}
+  .guide-grid{grid-template-columns:minmax(0,1fr)}
+  .guide-grid .btn{width:100%}
+}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">🎓 <span class="name">校园小助手</span> <span class="badge">Web Agent</span></div>
-  <button id="theme-btn" title="切换深色模式" onclick="toggleTheme()">🌙</button>
-  <div id="key-dot"><span class="dot"></span><span id="key-text">未配置</span></div>
+  <div class="logo"><span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3.5 3.5 8 12 12.5 20.5 8 12 3.5Z"/><path d="M6.5 10.2v5.3c3.5 2.2 7.5 2.2 11 0v-5.3M20.5 8v6.2"/></svg></span><span class="name">校园小助手</span> <span class="badge">Web Agent</span></div>
+  <button id="theme-btn" type="button" title="切换深色模式" aria-label="切换深色模式" aria-pressed="false" onclick="toggleTheme()">🌙</button>
+  <div id="key-dot" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="key-text">未配置</span></div>
+  <div id="account-user" style="display:none"><span class="account-name" id="account-name"></span><button type="button" onclick="logoutAccount()">退出</button></div>
 </header>
 
 <main>
@@ -379,11 +597,11 @@ body.dark .service-card:hover,body.dark .service-card[aria-pressed="true"]{backg
         <button class="btn ghost sm" onclick="exportConversation()" title="导出为 Markdown 文件">💾 导出</button>
         <button class="btn ghost sm" onclick="clearChatView()">🔄 刷新</button>
       </div>
-      <div id="chat-box"></div>
+      <div id="chat-box" role="log" aria-live="polite" aria-label="对话消息"></div>
       <div class="chat-input">
-        <button id="voice-btn" title="语音输入" onclick="toggleVoice()" style="display:none">🎤</button>
-        <textarea id="msg-input" rows="1" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
-        <button class="btn" id="send-btn" onclick="sendMessage()">发送</button>
+        <button id="voice-btn" type="button" title="语音输入" aria-label="语音输入" onclick="toggleVoice()" style="display:none">🎤</button>
+        <textarea id="msg-input" rows="1" aria-label="输入消息" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+        <button class="btn" id="send-btn" type="button" onclick="sendMessage()">发送</button>
       </div>
     </div>
   </div>
@@ -392,8 +610,32 @@ body.dark .service-card:hover,body.dark .service-card[aria-pressed="true"]{backg
 <!-- ============ 办事导航 ============ -->
 <template id="chat-panel-services">
 <div class="panel-content services-view">
-  <h2 id="services-heading">校园办事导航</h2>
-  <p class="services-intro">选一件要办的事，查看已收录的官方资料和咨询联系人。办理细则尚未收录的地方会明确提示。</p>
+  <h2 id="services-heading">生活区 · 校园服务</h2>
+  <p class="services-intro">办事导航、部门联系人、学院信息、校内外地点和吃饭推荐都集中在这里。你也可以直接在对话中描述想解决的生活问题。</p>
+  <section class="guide-card" aria-labelledby="guide-heading">
+    <div class="guide-card-head">
+      <span class="guide-card-icon" aria-hidden="true">⌖</span>
+      <div>
+        <h3 id="guide-heading">智能地图导览</h3>
+        <p>告诉我起点和目的地，我会结合当前学校与高德地点数据生成导览，并提供地图位置和导航入口。</p>
+      </div>
+    </div>
+    <div class="guide-grid">
+      <label for="guide-from">从哪里出发
+        <input class="inp" id="guide-from" value="学校" placeholder="如：南门、一食堂">
+      </label>
+      <label for="guide-to">想去哪里
+        <input class="inp" id="guide-to" placeholder="如：图书馆、校外餐馆">
+      </label>
+      <button class="btn" type="button" onclick="startCampusGuide()">生成导览</button>
+    </div>
+    <div class="guide-examples" aria-label="导览示例">
+      <button class="guide-example" type="button" onclick="guideExample('从南门到图书馆怎么走？')">南门 → 图书馆</button>
+      <button class="guide-example" type="button" onclick="guideExample('校内最近的一食堂在哪里？')">找最近食堂</button>
+      <button class="guide-example" type="button" onclick="guideExample('学校附近评分高的餐馆有哪些？')">附近高分餐馆</button>
+    </div>
+    <p class="guide-hint">提示：地图评分来自高德返回值，不等同于完整用户评论；路线请以高德实时导航为准。</p>
+  </section>
   <div class="service-layout">
     <div>
       <label for="service-filter">查找办事事项</label>
@@ -401,6 +643,12 @@ body.dark .service-card:hover,body.dark .service-card[aria-pressed="true"]{backg
       <div id="service-grid" class="service-grid" aria-live="polite"></div>
     </div>
     <div id="service-detail" class="card service-detail" aria-live="polite"><p>选择左侧事项查看相关资料。</p></div>
+  </div>
+  <div class="card colleges-panel">
+    <h3>按学院查看信息</h3>
+    <p class="service-gap">点击学院，查看当前学校知识库中已核实的资料和联系人。未收录的内容会明确标注。</p>
+    <div id="college-grid" class="college-grid" aria-live="polite"></div>
+    <div id="college-detail" class="college-detail" aria-live="polite"><p>选择学院查看详情。</p></div>
   </div>
   <div class="card contacts-panel">
     <h3>找部门与联系人</h3>
@@ -502,7 +750,30 @@ body.dark .service-card:hover,body.dark .service-card[aria-pressed="true"]{backg
 <!-- ============ 学习中心 ============ -->
 <template id="chat-panel-learning">
 <div class="panel-content ">
+  <h2 class="module-panel-title">学习区</h2>
+  <p class="services-intro">根据当前学校资料和你上传的材料，整理知识总览、考点和自测题；审核通过后才会进入知识库。</p>
   <p class="muted">从当前对话提炼记忆与知识；知识需要你审核采纳后才会入库。</p>
+  <div class="card study-card">
+    <h3>📚 资料学习区</h3>
+    <p class="muted">选择当前学校的原资料，再上传或粘贴新资料，系统会综合生成考点、知识总览和自测题。回答严格依据所选资料。</p>
+    <label class="fld">选择知识库原资料（可多选）</label>
+    <div id="study-materials" class="study-materials" aria-live="polite">正在加载资料列表…</div>
+    <div class="study-upload">
+      <label class="btn ghost" style="cursor:pointer">📂 上传 txt / md
+        <input type="file" id="study-file" accept=".txt,.md,.markdown" style="display:none" onchange="readStudyFile(this)">
+      </label>
+      <span class="muted" id="study-file-name">也可以直接粘贴资料</span>
+    </div>
+    <input class="inp" id="study-upload-title" placeholder="上传资料标题（可选）" style="margin-top:10px">
+    <textarea class="inp" id="study-paste" rows="4" placeholder="粘贴需要分析的资料（可选）"></textarea>
+    <div class="study-controls">
+      <label class="muted">自测题数量 <input id="study-question-count" type="number" min="1" max="20" value="5"></label>
+      <label class="muted"><input id="study-save-upload" type="checkbox" checked> 同时保存上传资料到知识库</label>
+      <button class="btn" onclick="analyzeStudyMaterials()">生成考点和自测题</button>
+    </div>
+    <div class="status-line" id="study-status" role="status" aria-live="polite"></div>
+    <div id="study-result" class="study-result"></div>
+  </div>
   <button class="btn" style="margin:12px 0" onclick="learnCurrent()">提炼当前对话</button>
   <div class="stats" id="learn-stats"></div>
   <div class="card">
@@ -535,6 +806,7 @@ body.dark .service-card:hover,body.dark .service-card[aria-pressed="true"]{backg
       <div class="muted" id="school-count" style="margin-top:6px"></div>
       <div style="display:flex;gap:10px;margin-top:12px">
         <button class="btn" id="school-switch" onclick="selectSchool()">切换学校</button>
+        <button class="btn ghost" id="school-crawl" onclick="crawlSchool()">抓取官网资料</button>
       </div>
       <details class="help" style="margin-top:12px">
         <summary>添加未收录学校</summary>
@@ -576,6 +848,20 @@ body.dark .service-card:hover,body.dark .service-card[aria-pressed="true"]{backg
     </div>
   </div>
 </div>
+<div id="account-mask" class="modal-wrap">
+  <div class="modal">
+    <h4 id="account-title">登录校园小助手</h4>
+    <p id="account-desc">登录后才能访问你的校园助手。</p>
+    <label class="fld" for="account-username">用户名</label>
+    <input class="inp" id="account-username" type="text" maxlength="32" autocomplete="username" placeholder="3-32 位用户名">
+    <label class="fld" for="account-password">密码</label>
+    <input class="inp" id="account-password" type="password" maxlength="128" autocomplete="current-password" placeholder="至少 8 位">
+    <p id="account-err" style="color:#dc2626;margin:12px 0;display:none"></p>
+    <div class="ops">
+      <button class="btn primary" id="account-submit">登录</button>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -597,7 +883,11 @@ async function api(path, opts = {}) {
   const resp = await fetch(path, { headers: { 'Content-Type': 'application/json', 'X-Access-Token': getToken() }, ...opts });
   let data = null;
   try { data = await resp.json(); } catch (e) { data = null; }
-  if (resp.status === 401) { showTokenGate(); throw new Error('需要访问口令'); }
+  if (resp.status === 401) {
+    if (data && data.code === 'AUTH_REQUIRED') showAccountGate('login');
+    else showTokenGate();
+    throw new Error((data && data.error) || '需要认证');
+  }
   if (!resp.ok) throw new Error((data && data.error) || `请求失败 ${resp.status}`);
   return data;
 }
@@ -636,11 +926,60 @@ async function submitToken() {
 }
 $('#token-ok').addEventListener('click', submitToken);
 $('#token-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitToken(); });
+let accountMode = 'login';
+let accountPending = false;
+function showAccountGate(mode = 'login') {
+  if (accountPending) return;
+  accountMode = mode;
+  $('#account-title').textContent = mode === 'setup' ? '创建管理员账号' : '登录校园小助手';
+  $('#account-desc').textContent = mode === 'setup' ? '首次使用请创建管理员账号，账号信息只保存在本机服务端。' : '请输入账号密码继续使用校园助手。';
+  $('#account-submit').textContent = mode === 'setup' ? '创建并登录' : '登录';
+  $('#account-password').setAttribute('autocomplete', mode === 'setup' ? 'new-password' : 'current-password');
+  $('#account-err').style.display = 'none';
+  $('#account-mask').classList.add('show');
+  setTimeout(() => $('#account-username').focus(), 60);
+}
+async function submitAccount() {
+  if (accountPending) return;
+  const username = $('#account-username').value.trim();
+  const password = $('#account-password').value;
+  if (!username || !password) return;
+  accountPending = true; $('#account-submit').disabled = true;
+  try {
+    const endpoint = accountMode === 'setup' ? '/api/public/register' : '/api/public/login';
+    const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({username, password}) });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || '登录失败');
+    location.reload();
+  } catch (e) {
+    $('#account-err').textContent = e.message;
+    $('#account-err').style.display = 'block';
+  } finally {
+    accountPending = false; $('#account-submit').disabled = false;
+  }
+}
+async function logoutAccount() {
+  try { await fetch('/api/auth/logout', {method:'POST', headers:{'Content-Type':'application/json','X-Access-Token':getToken()}}); } catch (e) { }
+  location.reload();
+}
+$('#account-submit').addEventListener('click', submitAccount);
+$('#account-password').addEventListener('keydown', e => { if (e.key === 'Enter') submitAccount(); });
 (async function checkTokenGate() {
   try {
     const resp = await fetch('/api/public/auth');
     const data = await resp.json();
-    if (data && data.required && !getToken()) showTokenGate();
+    if (data && data.account_setup_required && !data.required) { showAccountGate('setup'); return; }
+    let accountOK = false;
+    if (data && data.account_required) {
+      const me = await fetch('/api/auth/me', {headers: {'X-Access-Token': getToken()}}).catch(() => null);
+      const current = me ? await me.json().catch(() => null) : null;
+      accountOK = !!(current && current.authenticated && current.user && current.user.id);
+      if (accountOK) {
+        $('#account-user').style.display = 'flex';
+        $('#account-name').textContent = current.user.username;
+      } else { showAccountGate('login'); return; }
+    }
+    if (data && data.required && !getToken() && !accountOK) showTokenGate();
   } catch (e) { /* 探测失败不阻塞页面 */ }
 })();
 function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -722,7 +1061,7 @@ function md(text) {
 }
 
 /* ================= 对话内操作卡片 ================= */
-const PANEL_TITLES = {services:'校园办事',knowledge:'知识库',memory:'长期记忆',learning:'学习与审核',settings:'设置'};
+const PANEL_TITLES = {services:'生活区',knowledge:'知识库',memory:'长期记忆',learning:'学习区',settings:'设置'};
 function mountChatPanels(message, toolEvents, eager = false) {
   const seen = new Set();
   for (const ev of toolEvents || []) {
@@ -759,11 +1098,11 @@ async function openChatPanel(card) {
   const button = card.querySelector('.chat-panel-head button'); button.textContent = '收起'; button.setAttribute('aria-expanded','true');
   card.setAttribute('aria-busy','true');
   try {
-    if (panel === 'services') await loadServices();
+    if (panel === 'services') { await loadServices(); await loadColleges(); }
     if (panel === 'knowledge') await loadKnowledge();
     if (panel === 'memory') await loadMemories();
-    if (panel === 'learning') { await loadLearnStats(); if (card.isConnected && !body.hidden) await switchLearnTab('pending'); }
-    if (panel === 'settings') { await loadSchools(); await loadConfigPage(); if (card.isConnected && !body.hidden) await loadMapsConfig(); }
+    if (panel === 'learning') { await loadStudyMaterials(); await loadLearnStats(); if (card.isConnected && !body.hidden) await switchLearnTab('pending'); }
+    if (panel === 'settings') await loadSchools();
   } catch (e) {
     if (card.isConnected && !body.hidden) {
       const error = document.createElement('p'); error.className = 'err'; error.setAttribute('role','alert'); error.textContent = '加载失败：' + e.message;
@@ -798,6 +1137,8 @@ function safeAmapUrl(value) {
 function placeResultsHtml(result) {
   const notice = '<p class="map-notice">' + esc(result.notice || '高德地图未提供用户评论正文。') + '</p>';
   const time = result.fetched_at ? '<p class="map-notice">来源：高德地图 · 查询于 ' + esc(result.fetched_at) + '</p>' : '';
+  const origin = result.origin && result.origin.name ? '<div class="route-summary"><span class="route-summary-icon" aria-hidden="true">⌖</span><span>导览起点：<strong>' + esc(result.origin.name) + '</strong></span>' + (result.origin.fallback ? '<span class="tag amber">已回退学校中心点</span>' : '<span class="tag green">已确认</span>') + '</div>' : '';
+  const originNote = result.origin_note ? '<p class="map-notice map-warning">' + esc(result.origin_note) + '</p>' : '';
   if (!result.available) return '<div class="place-card"><p>' + esc(result.message || '暂时无法查询地图。') + '</p></div>' + notice;
   const rows = (result.results || []).map(row => {
     const facts = [
@@ -816,7 +1157,7 @@ function placeResultsHtml(result) {
       (row.opening_hours ? '<p>营业时间（地图记录）：'+esc(row.opening_hours)+'</p>' : '') +
       '<div class="place-actions">'+links+button+'</div></article>';
   }).join('');
-  return (rows || '<p class="muted">'+esc(result.message || '本次没有匹配地点。')+'</p>') + notice + time;
+  return origin + originNote + (rows || '<p class="muted">'+esc(result.message || '本次没有匹配地点。')+'</p>') + notice + time;
 }
 function mountPlaceResults(message, toolEvents) {
   for (const ev of toolEvents || []) {
@@ -898,26 +1239,48 @@ function showWelcome() {
   <div class="welcome fallback" id="welcome-box">
     <h3>👋 你好，我是校园小助手</h3>
     <div>官网资料 · 教务校规 · 校园生活</div>
-    <p class="muted">所有功能都在对话中：可以说“办事导航”“查看知识库”“查看记忆”“审核学习内容”或“修改设置”。</p>
+    <p class="muted">所有功能都在对话中：可以说“办事导航”“查看知识库”“查看记忆”“审核学习内容”或“切换学校”。</p>
+    <div class="module-entry-grid" aria-label="功能模块">
+      <button class="module-entry life" type="button" onclick="quickAskPrompt('打开生活区')">
+        <span class="module-entry-icon" aria-hidden="true">⌂</span>
+        <span><strong>生活区</strong><small>办事、地点、吃饭和校园联系人</small></span>
+      </button>
+      <button class="module-entry study" type="button" onclick="quickAskPrompt('打开学习区')">
+        <span class="module-entry-icon" aria-hidden="true">✦</span>
+        <span><strong>学习区</strong><small>资料分析、考点、自测题和知识审核</small></span>
+      </button>
+    </div>
     <div class="examples">
-      <span class="ex" onclick="quickAsk(this)">中午吃什么？</span>
-      <span class="ex" onclick="quickAsk(this)">教务处学籍科的电话是多少？</span>
-      <span class="ex" onclick="quickAsk(this)">帮我算一下 (3.5*2+10)/4</span>
-      <span class="ex" onclick="quickAsk(this)">奖学金怎么申请？</span>
-      <span class="ex" onclick="quickAsk(this)">图书馆几点开门？</span>
-      <span class="ex" onclick="quickAsk(this)">查询本学期校历</span>
-      <span class="ex" onclick="quickAsk(this)">查询学校章程</span>
+      <button class="ex" type="button" onclick="quickAsk(this)">中午吃什么？</button>
+      <button class="ex" type="button" onclick="quickAsk(this)">教务处学籍科的电话是多少？</button>
+      <button class="ex" type="button" onclick="quickAsk(this)">帮我算一下 (3.5*2+10)/4</button>
+      <button class="ex" type="button" onclick="quickAsk(this)">奖学金怎么申请？</button>
+      <button class="ex" type="button" onclick="quickAsk(this)">图书馆几点开门？</button>
+      <button class="ex" type="button" onclick="quickAsk(this)">查询本学期校历</button>
+      <button class="ex" type="button" onclick="quickAsk(this)">查询学校章程</button>
     </div>
   </div>`;
 }
 
 function quickAsk(el) { $('#msg-input').value = el.textContent; sendMessage(); }
+function quickAskPrompt(text) { $('#msg-input').value = text; sendMessage(); }
+function guideExample(text) { quickAskPrompt(text); }
+function startCampusGuide() {
+  const from = ($('#guide-from')?.value || '学校').trim() || '学校';
+  const to = ($('#guide-to')?.value || '').trim();
+  if (!to) {
+    toast('请先填写目的地', true);
+    $('#guide-to')?.focus();
+    return;
+  }
+  quickAskPrompt(`从${from}到${to}怎么走？`);
+}
 
 function renderMessage(role, content, toolEvents, messageId, rating, sourceRefs = []) {
   const box = $('#chat-box');
   const div = document.createElement('div');
   div.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
-  const avatar = role === 'user' ? '🙋' : '🎓';
+  const avatar = role === 'user' ? '我' : 'AI';
   const toolsHtml = (toolEvents || []).map(e => toolBlockHtml(e)).join('');
   const fbHtml = role === 'assistant' && messageId ? `
     <div class="fb">
@@ -968,6 +1331,7 @@ async function sendMessage(options = {}) {
   const input = $('#msg-input');
   const text = input.value.trim();
   const sendBtn = $('#send-btn');
+  const chatBox = $('#chat-box');
 
   // 发送中点击 = 停止生成
   if (state.sending) {
@@ -978,13 +1342,14 @@ async function sendMessage(options = {}) {
   if (!state.convId) { const r = await api('/api/conversations', { method: 'POST' }); state.convId = r.id; }
   input.value = ''; input.style.height = 'auto';
   state.sending = true; state.controller = new AbortController();
-  sendBtn.disabled = false; sendBtn.classList.add('stop'); sendBtn.textContent = '⏹ 停止';
+  chatBox.setAttribute('aria-busy', 'true');
+  sendBtn.disabled = false; sendBtn.classList.add('stop'); sendBtn.textContent = '停止'; sendBtn.setAttribute('aria-label', '停止生成');
 
   $('#welcome-box')?.remove();
   renderMessage('user', text, [], null, 0);
   const shell = document.createElement('div');
   shell.className = 'msg assistant';
-  shell.innerHTML = `<div class="avatar">🎓</div>
+  shell.innerHTML = `<div class="avatar">AI</div>
     <div class="bubble-wrap">
       <div class="tools" id="live-tools"></div>
       <div class="bubble typing"><i></i><i></i><i></i></div>
@@ -997,7 +1362,6 @@ async function sendMessage(options = {}) {
   let rawText = '';
   const toolsEl = shell.querySelector('.tools');
   const bubbleEl = shell.querySelector('.bubble');
-  const chatBox = $('#chat-box');
 
   const setTyping = () => {
     bubbleEl.className = 'bubble typing';
@@ -1098,7 +1462,8 @@ async function sendMessage(options = {}) {
     }
   } finally {
     state.sending = false; state.controller = null;
-    sendBtn.classList.remove('stop'); sendBtn.textContent = '发送';
+    chatBox.removeAttribute('aria-busy');
+    sendBtn.classList.remove('stop'); sendBtn.textContent = '发送'; sendBtn.setAttribute('aria-label', '发送消息');
     input.focus();
     const list = await loadConversations();
     if (list) { const c = list.find(x => x.id === state.convId); if (c) $('#chat-title').textContent = c.title; }
@@ -1325,6 +1690,65 @@ async function searchMemory() {
 }
 
 /* ================= 学习中心 ================= */
+let studyMaterials = [];
+let studyUploadText = '';
+async function loadStudyMaterials() {
+  const box = $('#study-materials');
+  if (!box) return;
+  try {
+    studyMaterials = await api('/api/learning/materials');
+    box.innerHTML = studyMaterials.length ? studyMaterials.map(item => `
+      <label class="study-material"><input type="checkbox" data-study-id="${esc(item.id)}">
+        <span><strong>${esc(item.title || '未命名资料')}</strong><small>${esc(item.ktype || '资料')} · ${esc(item.source || '未标注来源')} · ${item.size || 0} 字</small></span>
+      </label>`).join('') : '<p class="muted">当前学校知识库暂无可选资料。</p>';
+  } catch (e) { box.textContent = '资料列表加载失败：' + e.message; }
+}
+function readStudyFile(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { toast('单个学习资料不能超过 2 MB', true); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    studyUploadText = String(reader.result || '');
+    $('#study-file-name').textContent = `${file.name}（${studyUploadText.length} 字）`;
+    if (!$('#study-upload-title').value.trim()) $('#study-upload-title').value = file.name.replace(/\.[^.]+$/, '');
+  };
+  reader.onerror = () => { studyUploadText = ''; toast('读取文件失败', true); };
+  reader.readAsText(file, 'utf-8');
+}
+function selectedStudyIds() {
+  return Array.from(document.querySelectorAll('#study-materials [data-study-id]:checked')).map(input => Number(input.dataset.studyId)).filter(Number.isInteger);
+}
+function studyResultHtml(result) {
+  const points = (result.key_points || []).map(item => `<div class="study-point"><strong>📌 ${esc(item.point)}</strong><span>${esc(item.explanation)}</span><small class="muted">来源：${esc(item.source || '未标注')}</small></div>`).join('');
+  const questions = (result.questions || []).map((item, index) => `<div class="study-question"><strong>${index + 1}. ${esc(item.question)}</strong>${item.options?.length ? `<ol>${item.options.map(option => `<li>${esc(option)}</li>`).join('')}</ol>` : ''}<details><summary>查看答案与解析</summary><p><b>答案：</b>${esc(item.answer)}</p><p>${esc(item.explanation)}</p><small>来源：${esc(item.source || '未标注')}</small></details></div>`).join('');
+  return `<div class="service-note">${esc(result.overview || '已完成资料分析')}<br><span class="muted">本次使用 ${result.materials?.length || 0} 份资料，生成 ${result.question_count || 0} 道题。</span></div><h4>核心考点</h4>${points || '<p class="service-gap">资料中未能提炼出结构化考点。</p>'}<h4>自测题</h4>${questions || '<p class="service-gap">资料中未能生成可核对的题目。</p>'}`;
+}
+async function analyzeStudyMaterials() {
+  const status = $('#study-status');
+  const resultBox = $('#study-result');
+  if (!status || !resultBox) return;
+  const paste = $('#study-paste')?.value.trim() || '';
+  const upload = studyUploadText.trim() || paste;
+  const ids = selectedStudyIds();
+  if (!ids.length && !upload) { status.className = 'status-line bad'; status.textContent = '请先选择知识库资料或上传/粘贴资料。'; return; }
+  const button = document.querySelector('.study-card .study-controls .btn');
+  if (button) button.disabled = true;
+  status.className = 'status-line'; status.textContent = '正在综合资料并生成考点和自测题…';
+  try {
+    const response = await api('/api/learning/analyze', { method: 'POST', body: JSON.stringify({
+      document_ids: ids,
+      uploaded_title: $('#study-upload-title')?.value.trim() || '',
+      uploaded_content: upload,
+      question_count: Number($('#study-question-count')?.value || 5),
+      save_upload: Boolean($('#study-save-upload')?.checked),
+    })});
+    resultBox.innerHTML = studyResultHtml(response);
+    status.className = 'status-line ok'; status.textContent = '分析完成；资料来源和答案可展开核对。';
+    if ($('#study-save-upload')?.checked) { studyUploadText = ''; if ($('#study-paste')) $('#study-paste').value = ''; if ($('#study-file')) $('#study-file').value = ''; if ($('#study-file-name')) $('#study-file-name').textContent = '也可以直接粘贴资料'; await loadStudyMaterials(); }
+  } catch (e) { status.className = 'status-line bad'; status.textContent = '分析失败：' + e.message; }
+  finally { if (button) button.disabled = false; }
+}
 async function loadLearnStats() {
   if (!$('#learn-stats')) return;
   const s = await api('/api/learning/stats');
@@ -1409,9 +1833,31 @@ async function selectSchool() {
   try {
     const r = await api('/api/schools/select', { method: 'POST', body: JSON.stringify({ school_id: id }) });
     status.className = 'status-line ok'; status.textContent = `已切换到 ${r.current?.name || '所选学校'}。`;
-    await loadMapsConfig();
+    await loadSchools();
     await loadKnowledge();
   } catch (e) { status.className = 'status-line bad'; status.textContent = e.message; }
+}
+async function crawlSchool() {
+  const id = $('#school-picker')?.value;
+  const status = $('#school-status');
+  const button = $('#school-crawl');
+  if (!id || !status) return;
+  status.className = 'status-line'; status.textContent = '正在抓取官网并筛选可问答资料，请稍候…';
+  if (button) button.disabled = true;
+  try {
+    const result = await api('/api/schools/' + encodeURIComponent(id) + '/crawl', {
+      method: 'POST', body: JSON.stringify({ max_pages: 80, delay: 0.35, timeout: 15 })
+    });
+    await loadSchools();
+    if ($('#school-picker')) $('#school-picker').value = id;
+    if (result.school?.current) await loadKnowledge();
+    status.className = 'status-line ok';
+    status.textContent = `官网抓取完成：筛选 ${result.selected || 0} 页，新增 ${result.added || 0} 条，更新 ${result.updated || 0} 条。`;
+  } catch (e) {
+    status.className = 'status-line bad'; status.textContent = e.message;
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 async function saveSchoolProfile() {
   const id = $('#school-picker')?.value, website = $('#school-site')?.value.trim() || '';
@@ -1547,13 +1993,20 @@ async function testMapsConfig() {
 
 /* ================= 主题切换 ================= */
 function initTheme() {
-  if (localStorage.getItem('ca-theme') === 'dark') document.body.classList.add('dark');
-  $('#theme-btn').textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+  const dark = localStorage.getItem('ca-theme') === 'dark';
+  if (dark) document.body.classList.add('dark');
+  const btn = $('#theme-btn');
+  btn.textContent = dark ? '☀️' : '🌙';
+  btn.setAttribute('aria-pressed', String(dark));
+  btn.setAttribute('aria-label', dark ? '切换浅色模式' : '切换深色模式');
 }
 function toggleTheme() {
   const dark = document.body.classList.toggle('dark');
   localStorage.setItem('ca-theme', dark ? 'dark' : 'light');
-  $('#theme-btn').textContent = dark ? '☀️' : '🌙';
+  const btn = $('#theme-btn');
+  btn.textContent = dark ? '☀️' : '🌙';
+  btn.setAttribute('aria-pressed', String(dark));
+  btn.setAttribute('aria-label', dark ? '切换浅色模式' : '切换深色模式');
 }
 
 /* ================= 语音输入 ================= */
@@ -1602,6 +2055,9 @@ function toggleVoice() {
 let serviceItems = [];
 let selectedService = null;
 let serviceRequest = 0;
+let collegeItems = [];
+let selectedCollege = null;
+let collegeRequest = 0;
 async function loadServices() {
   if (serviceItems.length) { filterServices(); return; }
   $('#service-grid').textContent = '正在加载办事事项…';
@@ -1624,6 +2080,40 @@ function filterServices() {
 }
 function contactsHtml(contacts) {
   return contacts.map(contact => `<div class="contact-item"><div class="contact-role">${esc(contact.department)} · ${esc(contact.role)}</div><p>电话：${esc(contact.phone)}<br>办公地址：${esc(contact.address || '未标注')}</p>${sourceRefsHtml([contact])}</div>`).join('');
+}
+async function loadColleges() {
+  if (collegeItems.length) { renderColleges(); return; }
+  const grid = $('#college-grid');
+  if (!grid) return;
+  grid.textContent = '正在加载学院列表…';
+  try {
+    collegeItems = await api('/api/colleges');
+    renderColleges();
+  } catch (e) {
+    grid.textContent = '学院列表加载失败：' + e.message;
+  }
+}
+function renderColleges() {
+  const grid = $('#college-grid');
+  if (!grid) return;
+  grid.innerHTML = collegeItems.map(item => `<button type="button" class="college-card" data-college="${esc(item.id).replace(/"/g, '&quot;')}" aria-pressed="${selectedCollege === item.id}"><strong>${esc(item.name)}</strong></button>`).join('');
+  grid.querySelectorAll('[data-college]').forEach(button => button.onclick = () => openCollege(button.dataset.college));
+}
+async function openCollege(id) {
+  selectedCollege = id; renderColleges();
+  const request = ++collegeRequest;
+  const detail = $('#college-detail');
+  if (!detail) return;
+  detail.textContent = '正在查找学院资料和联系人…'; detail.setAttribute('aria-busy', 'true');
+  try {
+    const item = await api('/api/colleges/' + encodeURIComponent(id));
+    if (request !== collegeRequest) return;
+    const references = item.references?.length ? item.references.map(ref => `<p><strong>${esc(ref.title || '相关资料')}</strong></p><p class="service-excerpt">${esc(ref.content || '')}</p>${sourceRefsHtml([ref])}`).join('') : '<p class="service-gap">尚未找到该学院的可核对资料。</p>';
+    const contacts = item.contacts?.length ? contactsHtml(item.contacts) : '<p class="service-gap">尚未找到该学院的官网联系人。</p>';
+    detail.innerHTML = `<h3>${esc(item.name)}</h3><div class="service-note">${esc(item.notice || '')}</div><h4>已收录的学院资料</h4>${references}<h4>官网联系人</h4><div class="contacts-grid">${contacts}</div><p class="service-gap">${esc(item.missing || '')}</p>`;
+  } catch (e) {
+    if (request === collegeRequest) detail.textContent = '查询失败：' + e.message;
+  } finally { if (request === collegeRequest) detail.setAttribute('aria-busy', 'false'); }
 }
 async function openService(id) {
   selectedService = id; filterServices();

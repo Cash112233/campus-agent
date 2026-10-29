@@ -173,9 +173,13 @@ class RAG:
             is_relevant(q, groups, d["meta"].get("title"), d["meta"].get("content", "")))
         for r in res:
             title = compact(r["meta"].get("title", "").removeprefix("[官网]"))
-            q_bigrams = {t for t in tokenize(q) if len(t) > 1}
+            # 标题加权也使用主题规范词，保证“饭卡”能命中“校园卡”、“VPN”能命中“校园网”等别名标题。
+            q_bigrams = {t for t in tokenize(expanded) if len(t) > 1}
             overlap = len(q_bigrams & set(tokenize(title))) / max(1, len(q_bigrams))
             r["score"] += 0.18 * overlap
+            # 主题规范词命中标题时提高权重，解决短问题中别称占比过高导致的低相似度。
+            if any(any(word in title for word in group) for group in groups):
+                r["score"] += 0.12
             if title and (q == title or title in q):
                 r["score"] += 0.3
         res.sort(key=lambda r: -r["score"])

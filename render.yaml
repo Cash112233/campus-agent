@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: campus-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd backend && python main.py
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: ACCESS_TOKEN
+        sync: false
+      - key: LOCK_CONFIG
+        value: "1"

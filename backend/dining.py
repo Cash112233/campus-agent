@@ -6,6 +6,14 @@ from db import get_conn
 from retrieval_rules import source_meta
 
 
+def _active_school_id():
+    try:
+        from rag import active_school_id
+        return active_school_id()
+    except Exception:
+        return "hlby"
+
+
 def is_food_request(message):
     q = re.sub(r'\s+', '', str(message or ''))
     if re.search(r'不要推荐|不需要推荐|不用推荐|通知|请假|成绩|课表|吃什么药|吃啥药|术后|过敏|忌口|素食|不吃|不能吃', q):
@@ -73,7 +81,19 @@ def recommend_food(query='', exclude_names=(), rng=None):
     budget = re.search(r'(\d+(?:\.\d+)?)\s*元\s*(?:以内|以下|内|左右)|(?:预算|不超过|最多)\s*(\d+(?:\.\d+)?)', q)
     cap = float(next(g for g in budget.groups() if g)) if budget else None
     candidates, seen = [], set()
-    for row in get_conn().execute("SELECT id,title,content,source,ktype,created_at FROM knowledge WHERE ktype='食堂资料' ORDER BY id"):
+    conn = get_conn()
+    school_id = _active_school_id()
+    try:
+        menu_rows = conn.execute(
+            "SELECT id,title,content,source,ktype,created_at FROM knowledge "
+            "WHERE ktype='食堂资料' AND (school_id=? OR school_id='common') ORDER BY id",
+            (school_id,),
+        )
+    except Exception as error:
+        if "school_id" not in str(error):
+            raise
+        menu_rows = conn.execute("SELECT id,title,content,source,ktype,created_at FROM knowledge WHERE ktype='食堂资料' ORDER BY id")
+    for row in menu_rows:
         location = _location(row['title'])
         if not location or not row['source']:
             continue

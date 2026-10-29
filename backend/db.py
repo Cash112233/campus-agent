@@ -81,6 +81,21 @@ def init_db():
         comment TEXT,
         created_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS users(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS sessions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        created_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
     """)
     columns = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
     if "source_refs" not in columns:
@@ -93,5 +108,7 @@ def init_db():
     conversation_columns = {row[1] for row in conn.execute("PRAGMA table_info(conversations)")}
     if "school_id" not in conversation_columns:
         conn.execute("ALTER TABLE conversations ADD COLUMN school_id TEXT DEFAULT 'hlby'")
+    if "user_id" not in conversation_columns:
+        conn.execute("ALTER TABLE conversations ADD COLUMN user_id INTEGER")
     conn.execute("UPDATE conversations SET school_id='hlby' WHERE school_id IS NULL OR school_id='' ")
     conn.commit()

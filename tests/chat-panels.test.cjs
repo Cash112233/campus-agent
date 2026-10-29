@@ -9,12 +9,13 @@ test('feature navigation and standalone feature pages are removed',()=>{
   for(const panel of ['services','knowledge','memory','learning','settings'])
     assert.match(html,new RegExp('<template id="chat-panel-'+panel+'"'));
 });
-test('inline controls are restored from saved tool events and passwords stay in forms',()=>{
+test('设置卡片只保留学校模板，其他服务配置不出现在界面',()=>{
   assert.match(html,/function mountChatPanels\(/);
   assert.match(html,/mountChatPanels\(div, toolEvents/);
   assert.match(html,/mountChatPanels\(shell, ev.data.tool_events/);
   const settingsTemplate = html.match(/<template id="chat-panel-settings">[\s\S]*?<\/template>/)?.[0] || '';
   assert.match(settingsTemplate,/id="school-picker"/);
+  assert.match(settingsTemplate,/id="school-crawl"/);
   assert.doesNotMatch(settingsTemplate,/id="cfg-key"/);
   assert.doesNotMatch(settingsTemplate,/id="map-key"/);
   assert.doesNotMatch(settingsTemplate,/大模型配置（DeepSeek）/);
