@@ -11,6 +11,7 @@ output/*
 !output/hlj_schools.json
 !output/八一农垦大学部门电话簿.md
 !output/README_部署说明.md
+!output/knowledge_seed.json
 
 __pycache__/
 *.pyc

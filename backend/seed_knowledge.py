@@ -15,6 +15,7 @@ from rag import chunk_text
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output")
 STATE_FILE = os.path.join(OUT, "byau_crawl_state.json")
 PHONE_FILE = os.path.join(OUT, "八一农垦大学部门电话簿.md")
+KNOWLEDGE_SEED_FILE = os.path.join(OUT, "knowledge_seed.json")
 
 MIN_CHARS = 50
 EXCLUDE_EXT = (".xls", ".doc", ".docx", ".pdf", ".ppt", ".properties", ".psp", ".js", ".css")
@@ -29,6 +30,21 @@ def _norm_url(u):
 def _load_docs():
     """返回 (title, source, content, ktype) 列表；无数据文件时返回空"""
     docs = []
+    # 本机已整理的全部知识库快照（官网、电话簿、食堂与学习资料）
+    if os.path.exists(KNOWLEDGE_SEED_FILE):
+        with open(KNOWLEDGE_SEED_FILE, encoding="utf-8-sig") as f:
+            for item in json.load(f):
+                content = (item.get("content") or "").strip()
+                if len(content) < MIN_CHARS:
+                    continue
+                docs.append((
+                    (item.get("title") or "无标题").strip(),
+                    (item.get("source") or "知识库快照").strip(),
+                    content,
+                    (item.get("ktype") or "文档").strip(),
+                ))
+        if docs:
+            return docs
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, encoding="utf-8-sig") as f:
             data = json.load(f)
