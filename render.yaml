@@ -10,5 +10,9 @@ services:
         sync: false
       - key: ACCESS_TOKEN
         sync: false
+      - key: VOLCENGINE_API_KEY
+        sync: false
+      - key: AMAP_KEY
+        sync: false
       - key: LOCK_CONFIG
         value: "1"

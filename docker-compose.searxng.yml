@@ -1,0 +1,9 @@
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: campus-agent-searxng
+    ports:
+      - "8888:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+    restart: unless-stopped

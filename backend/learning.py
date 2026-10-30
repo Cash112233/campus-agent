@@ -16,7 +16,7 @@ class LearningEngine:
     def __init__(self, rag):
         self.rag = rag
 
-    def analyze_materials(self, document_ids, uploaded_title, uploaded_content, llm, question_count=5):
+    def analyze_materials(self, document_ids, uploaded_title, uploaded_content, llm, question_count=5, school_id=None, user_id=None):
         """合并当前学校知识库资料与本次上传内容，生成考点、总结和自测题。"""
         conn = get_conn()
         ids = []
@@ -32,8 +32,8 @@ class LearningEngine:
         if ids:
             marks = ",".join("?" for _ in ids)
             rows = conn.execute(
-                f"SELECT id,title,source,content,ktype FROM knowledge WHERE id IN ({marks}) AND (school_id=? OR school_id='common')",
-                (*ids, _active_school_id()),
+                f"SELECT id,title,source,content,ktype FROM knowledge WHERE id IN ({marks}) AND (school_id=? OR school_id='common') AND (owner_user_id IS NULL OR owner_user_id=?)",
+                (*ids, str(school_id or _active_school_id()), user_id),
             ).fetchall()
             rows_by_id = {int(row["id"]): row for row in rows}
 
@@ -285,7 +285,7 @@ class LearningEngine:
                 f"WHERE l.status='rejected' AND c.school_id=?{user_clause}", user_params
             ).fetchone()["c"]
             knowledge_docs = conn.execute(
-                "SELECT COUNT(*) c FROM knowledge WHERE school_id=? OR school_id='common'", (school_id,)
+                "SELECT COUNT(*) c FROM knowledge WHERE ktype='学习资料' AND (school_id=? OR school_id='common') AND (owner_user_id IS NULL OR owner_user_id=?)", (school_id, user_id)
             ).fetchone()["c"]
             conversations = conn.execute(
                 "SELECT COUNT(*) c FROM conversations WHERE school_id=?" + (" AND user_id=?" if user_id is not None else ""), user_params
@@ -300,7 +300,7 @@ class LearningEngine:
             ).fetchone()["c"]
             return {
                 "pending": pending, "approved": approved, "rejected": rejected,
-                "memories": cnt("SELECT COUNT(*) c FROM memories"),
+                "memories": conn.execute("SELECT COUNT(*) c FROM memories WHERE user_id=?", (user_id,)).fetchone()["c"] if user_id is not None else cnt("SELECT COUNT(*) c FROM memories WHERE user_id IS NULL"),
                 "knowledge_docs": knowledge_docs, "conversations": conversations,
                 "feedback_up": feedback_up, "feedback_down": feedback_down,
             }
@@ -309,7 +309,7 @@ class LearningEngine:
             "pending": cnt("SELECT COUNT(*) c FROM learned WHERE status='pending'"),
             "approved": cnt("SELECT COUNT(*) c FROM learned WHERE status='approved'"),
             "rejected": cnt("SELECT COUNT(*) c FROM learned WHERE status='rejected'"),
-            "memories": cnt("SELECT COUNT(*) c FROM memories"),
+            "memories": cnt("SELECT COUNT(*) c FROM memories WHERE user_id IS NULL"),
             "knowledge_docs": cnt("SELECT COUNT(*) c FROM knowledge"),
             "conversations": cnt("SELECT COUNT(*) c FROM conversations"),
             "feedback_up": cnt("SELECT COUNT(*) c FROM feedback WHERE rating='up'"),

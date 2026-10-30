@@ -7,12 +7,12 @@ import ast
 import json
 import operator
 import re
+from contextvars import ContextVar
 import services
 import dining
 import chat_panels
 import maps
 import campus_profiles
-import dreamspace
 import web_search
 import config as cfgmod
 from retrieval_rules import topic_labels
@@ -25,11 +25,39 @@ WEEKDAY_MAP = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "天"
 
 # 供 RAG / 记忆管理器注入（由 main.py 启动时设置）
 _ctx = {"rag": None, "memory": None}
+_request_user_id = ContextVar("campus_request_user_id", default=None)
+_request_cfg = ContextVar("campus_request_cfg", default=None)
 
 
 def set_context(rag, memory):
     _ctx["rag"] = rag
     _ctx["memory"] = memory
+
+
+def set_request_context(user_id=None, cfg=None):
+    return (_request_user_id.set(user_id), _request_cfg.set(cfg))
+
+
+def reset_request_context(tokens):
+    user_token, cfg_token = tokens
+    # StreamingResponse 可能在不同的 worker context 中结束生成器；清理
+    # ContextVar 时不能让上下文差异冒泡成第二个“模型服务失败”。
+    try:
+        _request_user_id.reset(user_token)
+    except (RuntimeError, ValueError):
+        pass
+    try:
+        _request_cfg.reset(cfg_token)
+    except (RuntimeError, ValueError):
+        pass
+
+
+def current_user_id():
+    return _request_user_id.get()
+
+
+def current_config():
+    return _request_cfg.get() or cfgmod.load_config()
 
 
 def _unavailable(subject):
@@ -39,7 +67,7 @@ def _unavailable(subject):
 def _coverage_guidance(query):
     """资料未命中时给出下一步，不把缺口误说成学校没有规定。"""
     try:
-        cfg = maps.config.load_config()
+        cfg = current_config()
         profile = campus_profiles.get_profile(cfg.get("current_school_id", "hlby"), cfg) or {}
     except Exception:
         profile = {}
@@ -125,7 +153,8 @@ def query_academic_calendar():
 def search_knowledge(query):
     if not _ctx["rag"]:
         raise ValueError("知识库未初始化")
-    results = _ctx["rag"].search(query, top_k=4)
+    cfg = current_config()
+    results = _ctx["rag"].search(query, top_k=4, school_id=cfg.get("current_school_id"), user_id=current_user_id())
     result = {"query": query, "results": results, "count": len(results)}
     if not results:
         result.update(_coverage_guidance(query))
@@ -141,23 +170,17 @@ def search_campus_notice(keyword):
             "note": "知识库检索结果，并非实时通知列表；请核对原文标题、发布日期和适用范围。"}
 
 
-def search_dreamspace_activities(query=""):
-    """实时查询到梦空间活动；令牌只由服务端配置读取，不进入工具结果。"""
-    import config as cfgmod
-    return dreamspace.search_activities(str(query or "").strip(), cfgmod.load_config())
-
-
 def save_memory(content, category="通用"):
     if not content or not str(content).strip():
         raise ValueError("记忆内容不能为空")
-    r = _ctx["memory"].add(str(content).strip(), category or "通用", source="对话中保存")
+    r = _ctx["memory"].add(str(content).strip(), category or "通用", source="对话中保存", user_id=current_user_id())
     return {"saved": True, "id": r.get("id"), "duplicated": r.get("duplicated", False)}
 
 
 def search_memory(query):
     if not _ctx["memory"]:
         raise ValueError("记忆系统未初始化")
-    results = _ctx["memory"].search(query, top_k=3)
+    results = _ctx["memory"].search(query, top_k=3, user_id=current_user_id())
     return {"query": query, "results": results, "count": len(results)}
 
 
@@ -456,13 +479,6 @@ TOOL_SCHEMAS = [
 
 TOOL_SCHEMAS.extend([
     {"type": "function", "function": {
-        "name": "search_dreamspace_activities",
-        "description": "实时查询到梦空间活动列表和活动详情。用户询问讲座、竞赛、志愿活动、报名截止时间或最近有什么活动时使用；结果带官网链接和查询时间，不把历史知识库资料冒充实时活动。",
-        "parameters": {"type": "object", "properties": {
-            "query": {"type": "string", "description": "活动名称、主办单位或关键词；没有具体关键词时传空字符串"}
-        }, "required": []}
-    }},
-    {"type": "function", "function": {
         "name": "web_search_latest",
         "description": "仅在知识库检索为空，或用户问题包含最新/今天/本周/刚刚/通知/调整等时效词时调用。只返回最近 days 天内的结果。",
         "parameters": {"type": "object", "properties": {
@@ -501,11 +517,9 @@ def run_tool(name, args):
     """执行工具，返回 dict 结果；未知工具或参数错误抛异常（由调用方转为观察结果）"""
     args = args or {}
     if name == "search_campus_places":
-        return maps.search_places(args.get("query",""),args.get("scope","nearby"),args.get("radius"),args.get("sort","distance"),args.get("limit",5),origin_query=args.get("origin_query",""),rag=_ctx["rag"])
-    if name == "search_dreamspace_activities":
-        return search_dreamspace_activities(args.get("query", ""))
+        return maps.search_places(args.get("query",""),args.get("scope","nearby"),args.get("radius"),args.get("sort","distance"),args.get("limit",5),origin_query=args.get("origin_query",""),cfg=current_config(),rag=_ctx["rag"])
     if name == "web_search_latest":
-        cfg = cfgmod.load_config()
+        cfg = current_config()
         days = args.get("days", cfg.get("web_search_default_days", 7))
         return web_search.search_latest_clean(
             str(args.get("query", "")),
@@ -513,16 +527,16 @@ def run_tool(name, args):
             max_results=int(args.get("max_results", 5)),
         )
     if name == "get_campus_place_detail":
-        return maps.AmapClient(maps.config.load_config()).detail(args.get("poi_id",""))
+        return maps.AmapClient(current_config()).detail(args.get("poi_id",""))
     if name == "open_chat_panel":
         return chat_panels.open_panel(args.get("panel"))
     if name == 'recommend_campus_food':
-        return dining.recommend_food(args.get('query',''),args.get('exclude_names',()))
+        return dining.recommend_food(args.get('query',''),args.get('exclude_names',()),school_id=current_config().get('current_school_id'))
     if name == "find_campus_contact":
         query = str(args.get("query", "")).strip()
         if not query:
             raise ValueError("请输入部门、学院或岗位名称")
-        results = services.list_contacts(query)
+        results = services.list_contacts(query, school_id=current_config().get('current_school_id'))
         result = {"query": query, "results": results, "count": len(results), "note": "官网电话簿中的咨询联系人，不等于审批人；外线拨打方式请核对学校说明。"}
         if not results:
             result["message"] = "当前学校电话簿没有命中这个部门或岗位，不能据此判断学校没有对应联系人。"
@@ -531,7 +545,7 @@ def run_tool(name, args):
     if name == "get_campus_service":
         if not _ctx["rag"]:
             raise ValueError("知识库未初始化")
-        result = services.service_detail(str(args.get("service_id", "")), _ctx["rag"], str(args.get("college", "")))
+        result = services.service_detail(str(args.get("service_id", "")), _ctx["rag"], str(args.get("college", "")), school_id=current_config().get('current_school_id'))
         if result is None:
             raise ValueError("未找到该办事事项")
         return result

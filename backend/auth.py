@@ -62,15 +62,13 @@ def _verify_password(password, encoded):
 
 
 def _public_user(row):
-    return {"id": int(row["id"]), "username": row["username"], "role": row["role"]}
+    return {"id": int(row["id"]), "username": row["username"], "role": row["role"], "school_id": row["school_id"] or "hlby"}
 
 
 def _ensure_tables():
     """兼容已运行中的旧进程或测试替换的连接，认证表可安全幂等创建。"""
     conn = get_conn()
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('users','sessions')").fetchall()}
-    if tables == {"users", "sessions"}:
-        return
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS users(
@@ -78,6 +76,7 @@ def _ensure_tables():
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'user',
+            school_id TEXT NOT NULL DEFAULT 'hlby',
             created_at TEXT
         );
         CREATE TABLE IF NOT EXISTS sessions(
@@ -90,6 +89,9 @@ def _ensure_tables():
         );
         """
     )
+    user_columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "school_id" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN school_id TEXT NOT NULL DEFAULT 'hlby'")
     conn.commit()
 
 
@@ -105,19 +107,25 @@ def register_first_user(username, password):
     if user_count():
         raise ValueError("管理员账号已创建，请直接登录")
     try:
+        try:
+            from config import load_config
+            school_id = str(load_config().get("current_school_id") or "hlby")
+        except Exception:
+            school_id = "hlby"
         cur = conn.execute(
-            "INSERT INTO users(username,password_hash,role,created_at) VALUES(?,?,?,?)",
-            (username, _hash_password(password), "admin", now()),
+            "INSERT INTO users(username,password_hash,role,school_id,created_at) VALUES(?,?,?,?,?)",
+            (username, _hash_password(password), "admin", school_id, now()),
         )
         # 首个账号接管历史单用户对话，避免升级登录系统后旧记录消失。
         conn.execute("UPDATE conversations SET user_id=? WHERE user_id IS NULL", (cur.lastrowid,))
+        conn.execute("UPDATE memories SET user_id=? WHERE user_id IS NULL", (cur.lastrowid,))
         conn.commit()
     except Exception as error:
         conn.rollback()
         if "UNIQUE" in str(error).upper():
             raise ValueError("用户名已存在") from error
         raise
-    return {"id": cur.lastrowid, "username": username, "role": "admin"}
+    return {"id": cur.lastrowid, "username": username, "role": "admin", "school_id": school_id}
 
 
 def authenticate(username, password):
@@ -144,6 +152,13 @@ def create_session(user_id):
     return raw, expires
 
 
+def set_user_school(user_id, school_id):
+    _ensure_tables()
+    conn = get_conn()
+    conn.execute("UPDATE users SET school_id=? WHERE id=?", (str(school_id), user_id))
+    conn.commit()
+
+
 def get_user_by_token(token):
     _ensure_tables()
     value = str(token or "").strip()
@@ -151,7 +166,7 @@ def get_user_by_token(token):
         return None
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
     row = get_conn().execute(
-        "SELECT u.id,u.username,u.role,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=?",
+        "SELECT u.id,u.username,u.role,u.school_id,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=?",
         (digest,),
     ).fetchone()
     if not row:
@@ -164,7 +179,7 @@ def get_user_by_token(token):
         get_conn().execute("DELETE FROM sessions WHERE token_hash=?", (digest,))
         get_conn().commit()
         return None
-    return {"id": int(row["id"]), "username": row["username"], "role": row["role"]}
+    return {"id": int(row["id"]), "username": row["username"], "role": row["role"], "school_id": row["school_id"] or "hlby"}
 
 
 def revoke_token(token):

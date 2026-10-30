@@ -4,7 +4,9 @@ from db import get_conn
 from retrieval_rules import source_url, source_meta, COLLEGES
 
 
-def _active_school_id():
+def _active_school_id(school_id=None):
+    if school_id:
+        return str(school_id)
     try:
         from config import load_config
         return str(load_config().get("current_school_id") or "hlby")
@@ -38,13 +40,13 @@ def _college_name(value):
     raise ValueError("未找到该学院")
 
 
-def college_detail(college, rag):
+def college_detail(college, rag, school_id=None):
     """返回学院的已核实联系人和知识库资料，不补造学院简介或联系方式。"""
     name = _college_name(college)
-    contacts = list_contacts(name)
+    contacts = list_contacts(name, school_id=school_id) if school_id is not None else list_contacts(name)
     references = []
     if rag:
-        rows = rag.search(name, top_k=8)
+        rows = rag.search(name, top_k=8, school_id=school_id) if school_id is not None else rag.search(name, top_k=8)
         for row in rows:
             text = f"{row.get('title', '')} {row.get('content', '')}"
             if name in text:
@@ -61,7 +63,7 @@ def college_detail(college, rag):
     }
 
 
-def list_contacts(query=""):
+def list_contacts(query="", school_id=None):
     conn = get_conn()
     try:
         rows = conn.execute(
@@ -69,7 +71,7 @@ def list_contacts(query=""):
             "WHERE (school_id=? OR school_id='common') "
             "AND ((ktype='官网爬取' AND (title LIKE '%电话查询%' OR title LIKE '%办公电话%')) "
             "OR (ktype='电话簿' AND content LIKE '%学校官网%')) ORDER BY id",
-            (_active_school_id(),),
+            (_active_school_id(school_id),),
         ).fetchall()
     except Exception as error:
         if "school_id" not in str(error):
@@ -129,14 +131,14 @@ def list_services(query=""):
             if not needle or any(needle in item[key] for key in ("title", "description", "category", "query"))]
 
 
-def service_detail(service_id, rag, college=""):
+def service_detail(service_id, rag, college="", school_id=None):
     item = next((x for x in SERVICES if x["id"] == service_id), None)
     if item is None: return None
     contacts = []
     for term in item["contact_terms"]:
-        contacts.extend(list_contacts(term))
-    references = [row for row in rag.search(item["query"], top_k=4)
+        contacts.extend(list_contacts(term, school_id=school_id))
+    references = [row for row in rag.search(item["query"], top_k=4, school_id=school_id)
                   if row.get("ktype") in ("官网爬取", "本科生手册") and not any(word in row["title"] for word in ("电话查询", "教学教辅机构", "党政管理机构"))]
     return {**{k: v for k, v in item.items() if k != "contact_terms"}, "contacts": contacts[:8],
-            "references": references, "college_contacts": list_contacts(college) if college else [], "status": "has_references" if references else "needs_sources",
+            "references": references, "college_contacts": list_contacts(college, school_id=school_id) if college else [], "status": "has_references" if references else "needs_sources",
             "notice": "以下为已收录的原文片段和咨询联系人；联系人不等于审批人。请核对适用学院、学历层次、学期及后续通知。"}

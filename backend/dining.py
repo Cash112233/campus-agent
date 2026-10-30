@@ -73,7 +73,7 @@ def _menu_rows(content):
             yield cells[i], '；'.join(formatted), [v for _,v in prices]
 
 
-def recommend_food(query='', exclude_names=(), rng=None):
+def recommend_food(query='', exclude_names=(), rng=None, school_id=None):
     rng = rng or random.SystemRandom()
     q = str(query or '').replace('1食堂','一食堂').replace('2食堂','二食堂').replace('1楼','一楼').replace('2楼','二楼').replace('3楼','三楼')
     halls = set(re.findall(r'[一二]食堂', q))
@@ -82,7 +82,7 @@ def recommend_food(query='', exclude_names=(), rng=None):
     cap = float(next(g for g in budget.groups() if g)) if budget else None
     candidates, seen = [], set()
     conn = get_conn()
-    school_id = _active_school_id()
+    school_id = str(school_id or _active_school_id())
     try:
         menu_rows = conn.execute(
             "SELECT id,title,content,source,ktype,created_at FROM knowledge "

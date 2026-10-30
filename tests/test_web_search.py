@@ -18,7 +18,7 @@ def _iso(days_ago: int) -> str:
 def _response(results):
     response = Mock()
     response.raise_for_status.return_value = None
-    response.json.return_value = {"results": results}
+    response.json.return_value = {"Result": {"WebResults": results}}
     return response
 
 
@@ -36,22 +36,17 @@ def test_search_latest_sorts_recent_dates_and_puts_undated_last():
     assert output[0]["domain"] == "today.example.com"
     assert output[-1]["published_date"] is None
     post.assert_called_once_with(
-        "https://api.tavily.com/search",
-        json={
-            "api_key": "test-key",
-            "query": "通知",
-            "search_depth": "advanced",
-            "days": 7,
-            "max_results": 10,
-            "include_raw_content": False,
-        },
+        "https://open.feedcoopapi.com/search_api/web_search",
+        headers={"Authorization": "Bearer test-key", "Content-Type": "application/json"},
+        json={"Query": "通知", "SearchType": "web", "EnableWaiting": True, "MaxWaitTime": 5000},
         timeout=15,
     )
 
 
-def test_search_latest_requires_api_key():
-    with pytest.raises(ValueError, match="TAVILY_API_KEY 未配置"):
-        web_search.search_latest("通知", api_key="")
+def test_search_latest_uses_searxng_url():
+    with patch("web_search.requests.post", return_value=_response([])) as post:
+        web_search.search_latest("通知", api_key="test-key")
+    assert post.call_args.args[0] == "https://open.feedcoopapi.com/search_api/web_search"
 
 
 def test_search_latest_wraps_request_errors():
@@ -86,6 +81,6 @@ def test_search_latest_clean_calls_search_latest_once():
     with patch.object(web_search, "search_latest", return_value=items) as search:
         output = web_search.search_latest_clean("通知", days=3, max_results=2)
 
-    search.assert_called_once_with("通知", 3, 2, api_key=None)
+    search.assert_called_once_with("通知", 3, 2)
     assert output == items
 

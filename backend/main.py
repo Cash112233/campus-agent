@@ -25,8 +25,8 @@ import maps
 import campus_profiles
 import school_crawler
 import seed_knowledge
-import dreamspace
 import auth
+import web_search
 from agent import Agent
 from learning import LearningEngine
 from llm import LLMClient
@@ -45,7 +45,7 @@ def _safe_error(error, cfg=None):
     """返回可展示给客户端的脱敏、截断错误信息。"""
     message = str(error or "未知错误")
     settings = cfg or {}
-    for key in ("api_key", "amap_key", "tavily_api_key", "dreamspace_web_token", "access_token"):
+    for key in ("api_key", "amap_key", "access_token"):
         secret = str(settings.get(key) or "")
         if secret:
             message = message.replace(secret, "[已隐藏]")
@@ -68,8 +68,22 @@ def _validate_base_url(value):
     return text
 
 
-def _current_school_id():
+def _current_school_id(request=None):
+    user = getattr(getattr(request, "state", None), "user", None) if request is not None else None
+    if user and user.get("school_id"):
+        return str(user["school_id"])
     return str(cfgmod.load_config().get("current_school_id") or "hlby")
+
+
+def _user_cfg(request=None):
+    cfg = cfgmod.load_config()
+    school_id = _current_school_id(request)
+    if school_id != cfg.get("current_school_id"):
+        try:
+            cfg = campus_profiles.apply_profile(cfg, school_id)
+        except ValueError:
+            pass
+    return cfg
 
 
 def _current_user_id(request=None):
@@ -81,9 +95,17 @@ def _current_user_id(request=None):
     return user_id if user_id and user_id > 0 else None
 
 
+def _require_admin(request):
+    """系统级配置和学校目录只能由管理员修改；未启用账号认证时保留兼容模式。"""
+    user = getattr(getattr(request, "state", None), "user", None) if request is not None else None
+    if user and user.get("role") != "admin" and user.get("auth_type") != "access_token":
+        return JSONResponse({"ok": False, "error": "只有管理员可以修改系统配置"}, status_code=403)
+    return None
+
+
 def _conversation_belongs_to_current_school(conversation_id, request=None):
     sql = "SELECT 1 FROM conversations WHERE id=? AND school_id=?"
-    params = [conversation_id, _current_school_id()]
+    params = [conversation_id, _current_school_id(request)]
     user_id = _current_user_id(request)
     if user_id is not None:
         sql += " AND user_id=?"
@@ -94,7 +116,7 @@ def _conversation_belongs_to_current_school(conversation_id, request=None):
 
 def _learned_belongs_to_current_school(learned_id, request=None):
     sql = "SELECT 1 FROM learned l JOIN conversations c ON c.id=l.conversation_id WHERE l.id=? AND c.school_id=?"
-    params = [learned_id, _current_school_id()]
+    params = [learned_id, _current_school_id(request)]
     user_id = _current_user_id(request)
     if user_id is not None:
         sql += " AND c.user_id=?"
@@ -105,7 +127,7 @@ def _learned_belongs_to_current_school(learned_id, request=None):
 
 def _message_belongs_to_current_school(message_id, request=None):
     sql = "SELECT 1 FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=? AND c.school_id=?"
-    params = [message_id, _current_school_id()]
+    params = [message_id, _current_school_id(request)]
     user_id = _current_user_id(request)
     if user_id is not None:
         sql += " AND c.user_id=?"
@@ -253,22 +275,21 @@ def get_config():
     cfg = cfgmod.load_config()
     key = cfg.get("api_key") or ""
     masked = (key[:4] + "****" + key[-4:]) if len(key) > 8 else ("已设置" if key else "")
-    tavily_key = cfg.get("tavily_api_key") or ""
-    masked_tavily = (tavily_key[:4] + "****" + tavily_key[-4:]) if len(tavily_key) > 8 else ("已设置" if tavily_key else "")
     return {
         "base_url": cfg["base_url"], "model": cfg["model"], "temperature": cfg["temperature"],
         "max_history": cfg.get("max_history", 20),
         "auto_learn": cfg.get("auto_learn", False),
         "auto_learn_threshold": cfg.get("auto_learn_threshold", 4),
         "has_key": bool(key), "masked_key": masked,
-        "has_tavily_key": bool(tavily_key), "masked_tavily_key": masked_tavily,
+        "has_volcengine_key": bool(cfg.get("volcengine_api_key")),
+        "masked_volcengine_key": ((cfg.get("volcengine_api_key")[:4] + "****" + cfg.get("volcengine_api_key")[-4:]) if len(cfg.get("volcengine_api_key") or "") > 8 else ("已设置" if cfg.get("volcengine_api_key") else "")),
         "web_search_default_days": cfg.get("web_search_default_days", 7),
     }
 
 
 class ConfigReq(BaseModel):
     api_key: Optional[str] = Field(default=None, max_length=300)
-    tavily_api_key: Optional[str] = Field(default=None, max_length=300)
+    volcengine_api_key: Optional[str] = Field(default=None, max_length=300)
     base_url: Optional[str] = Field(default=None, max_length=300)
     model: Optional[str] = Field(default=None, max_length=80)
     temperature: Optional[float] = Field(default=None, ge=0, le=2)
@@ -279,12 +300,15 @@ class ConfigReq(BaseModel):
 
 
 @app.post("/api/config")
-def save_config(req: ConfigReq):
+def save_config(req: ConfigReq, request: Request):
+    denied = _require_admin(request)
+    if denied:
+        return denied
     cfg = cfgmod.load_config()
     if req.api_key is not None:
         cfg["api_key"] = req.api_key.strip()
-    if req.tavily_api_key is not None:
-        cfg["tavily_api_key"] = req.tavily_api_key.strip()
+    if req.volcengine_api_key is not None:
+        cfg["volcengine_api_key"] = req.volcengine_api_key.strip()
     if req.base_url is not None:
         if cfg.get("lock_config"):
             return JSONResponse({"ok": False, "error": "部署模式下 base_url 已锁定（防密钥外发），请在本机修改 config.json"}, status_code=403)
@@ -309,7 +333,10 @@ def save_config(req: ConfigReq):
 
 
 @app.post("/api/config/test")
-def test_config():
+def test_config(request: Request):
+    denied = _require_admin(request)
+    if denied:
+        return denied
     import time
     cfg = cfgmod.load_config()
     if not cfg.get("api_key"):
@@ -334,12 +361,15 @@ class MapsConfigReq(BaseModel):
 
 
 @app.get("/api/maps/config")
-def get_maps_config():
-    return maps.public_config(cfgmod.load_config())
+def get_maps_config(request: Request):
+    return maps.public_config(_user_cfg(request))
 
 
 @app.post("/api/maps/config")
-def save_maps_config(req: MapsConfigReq):
+def save_maps_config(req: MapsConfigReq, request: Request):
+    denied = _require_admin(request)
+    if denied:
+        return denied
     if req.radius is not None and not 100 <= req.radius <= 50000:
         return JSONResponse({"ok": False, "error": "radius 必须在 100 到 50000 米之间"}, status_code=400)
     try:
@@ -354,31 +384,12 @@ def save_maps_config(req: MapsConfigReq):
 
 
 @app.post("/api/maps/test")
-def test_maps_config():
-    result = maps.AmapClient(cfgmod.load_config()).test_connection()
+def test_maps_config(request: Request):
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    result = maps.AmapClient(_user_cfg(request)).test_connection()
     return JSONResponse(result,status_code=200 if result["ok"] else 400)
-
-
-# ---------- 到梦空间实时活动 ----------
-class DreamSpaceSearchReq(BaseModel):
-    query: str = Field(default="", max_length=80)
-
-
-@app.get("/api/dreamspace/status")
-def dreamspace_status():
-    """只返回连接模式，不返回登录令牌。"""
-    token = cfgmod.load_config().get("dreamspace_web_token") or ""
-    return {
-        "enabled": True,
-        "mode": "account_session" if token else "public_activity",
-        "authenticated": bool(token),
-        "message": "已配置登录会话，将按账号可见范围查询活动。" if token else "当前使用到梦空间公开活动查询；登录会话未配置。",
-    }
-
-
-@app.post("/api/dreamspace/search")
-def dreamspace_search(req: DreamSpaceSearchReq):
-    return dreamspace.search_activities(req.query, cfgmod.load_config())
 
 
 class MapsSearchReq(BaseModel):
@@ -391,9 +402,9 @@ class MapsSearchReq(BaseModel):
 
 
 @app.post("/api/maps/search")
-def search_maps(req: MapsSearchReq):
+def search_maps(req: MapsSearchReq, request: Request):
     try:
-        return maps.search_places(**req.model_dump(),rag=rag)
+        return maps.search_places(**req.model_dump(), cfg=_user_cfg(request), rag=rag)
     except ValueError as error:
         return JSONResponse({"ok":False,"error":str(error)},status_code=400)
 
@@ -425,8 +436,8 @@ class SchoolCrawlReq(BaseModel):
     timeout: int = Field(default=15, ge=1, le=60)
 
 
-def _public_school_state(cfg):
-    current_id = cfg.get("current_school_id", "hlby")
+def _public_school_state(cfg, current_id=None):
+    current_id = current_id or cfg.get("current_school_id", "hlby")
     profiles = campus_profiles.list_profiles(cfg)
     return {
         "current_school_id": current_id,
@@ -437,24 +448,32 @@ def _public_school_state(cfg):
 
 
 @app.get("/api/schools")
-def list_schools():
-    return _public_school_state(cfgmod.load_config())
+def list_schools(request: Request):
+    return _public_school_state(_user_cfg(request), _current_school_id(request))
 
 
 @app.post("/api/schools/select")
-def select_school(req: SchoolSelectReq):
+def select_school(req: SchoolSelectReq, request: Request):
     try:
-        cfg = campus_profiles.apply_profile(cfgmod.load_config(), req.school_id)
+        base_cfg = cfgmod.load_config()
+        cfg = campus_profiles.apply_profile(base_cfg, req.school_id)
     except ValueError as error:
         return JSONResponse({"ok": False, "error": str(error)}, status_code=400)
-    cfgmod.save_config(cfg)
+    user_id = _current_user_id(request)
+    if user_id is not None:
+        auth.set_user_school(user_id, req.school_id)
+    else:
+        cfgmod.save_config(cfg)
     # 选择学校后马上刷新索引；当前对话和密钥保持不变。
     rag.reload()
-    return {"ok": True, **_public_school_state(cfg), "current": campus_profiles.public_profile(campus_profiles.get_profile(req.school_id, cfg), req.school_id)}
+    return {"ok": True, **_public_school_state(cfg, req.school_id), "current": campus_profiles.public_profile(campus_profiles.get_profile(req.school_id, cfg), req.school_id)}
 
 
 @app.post("/api/schools/{school_id}/crawl")
-def crawl_school(school_id: str, req: SchoolCrawlReq):
+def crawl_school(school_id: str, req: SchoolCrawlReq, request: Request):
+    denied = _require_admin(request)
+    if denied:
+        return denied
     cfg = cfgmod.load_config()
     try:
         result = school_crawler.crawl_and_import(
@@ -467,7 +486,10 @@ def crawl_school(school_id: str, req: SchoolCrawlReq):
 
 
 @app.post("/api/schools")
-def add_school(req: SchoolProfileReq):
+def add_school(req: SchoolProfileReq, request: Request):
+    denied = _require_admin(request)
+    if denied:
+        return denied
     try:
         cfg, profile = campus_profiles.add_custom_profile(cfgmod.load_config(), req.model_dump())
     except (TypeError, ValueError) as error:
@@ -477,7 +499,10 @@ def add_school(req: SchoolProfileReq):
 
 
 @app.patch("/api/schools/{school_id}")
-def update_school(school_id: str, req: SchoolProfileUpdateReq):
+def update_school(school_id: str, req: SchoolProfileUpdateReq, request: Request):
+    denied = _require_admin(request)
+    if denied:
+        return denied
     changes = {key: value for key, value in req.model_dump(exclude_none=True).items()}
     if "website" in changes and changes["website"]:
         parsed = urlparse(changes["website"])
@@ -504,11 +529,12 @@ class ChatReq(BaseModel):
 @app.post("/api/chat")
 def chat(req: ChatReq, request: Request):
     user_id = _current_user_id(request)
+    cfg = _user_cfg(request)
     if req.conversation_id and user_id is not None and not _conversation_belongs_to_current_school(req.conversation_id, request):
         return JSONResponse({"ok": False, "error": "该对话不属于当前账号"}, status_code=404)
     def gen():
         try:
-            for ev in agent.chat(req.conversation_id, req.message, place_id=req.place_id, user_id=user_id):
+            for ev in agent.chat(req.conversation_id, req.message, place_id=req.place_id, user_id=user_id, cfg_override=cfg):
                 yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
         except Exception:
             logger.exception("对话处理失败")
@@ -522,7 +548,7 @@ def chat(req: ChatReq, request: Request):
 @app.get("/api/conversations")
 def list_conversations(request: Request):
     conn = db.get_conn()
-    school_id = cfgmod.load_config().get("current_school_id", "hlby")
+    school_id = _current_school_id(request)
     user_id = _current_user_id(request)
     if user_id is None:
         rows = conn.execute(
@@ -540,7 +566,7 @@ def list_conversations(request: Request):
 @app.post("/api/conversations")
 def new_conversation(request: Request):
     conn = db.get_conn()
-    school_id = cfgmod.load_config().get("current_school_id", "hlby")
+    school_id = _current_school_id(request)
     user_id = _current_user_id(request)
     if user_id is None:
         cur = conn.execute(
@@ -559,7 +585,7 @@ def new_conversation(request: Request):
 @app.delete("/api/conversations/{cid}")
 def delete_conversation(cid: int, request: Request):
     conn = db.get_conn()
-    school_id = cfgmod.load_config().get("current_school_id", "hlby")
+    school_id = _current_school_id(request)
     user_id = _current_user_id(request)
     scope = " AND user_id=?" if user_id is not None else ""
     params = (cid, cid, school_id, user_id) if user_id is not None else (cid, cid, school_id)
@@ -579,7 +605,7 @@ def rename_conversation(cid: int, req: RenameReq, request: Request):
     if not title:
         return JSONResponse({"ok": False, "error": "标题不能为空"}, status_code=400)
     conn = db.get_conn()
-    school_id = cfgmod.load_config().get("current_school_id", "hlby")
+    school_id = _current_school_id(request)
     user_id = _current_user_id(request)
     if user_id is None:
         conn.execute("UPDATE conversations SET title=?, updated_at=? WHERE id=? AND school_id=?", (title, db.now(), cid, school_id))
@@ -592,7 +618,7 @@ def rename_conversation(cid: int, req: RenameReq, request: Request):
 @app.get("/api/conversations/{cid}/messages")
 def get_messages(cid: int, request: Request):
     conn = db.get_conn()
-    school_id = cfgmod.load_config().get("current_school_id", "hlby")
+    school_id = _current_school_id(request)
     user_id = _current_user_id(request)
     if user_id is None:
         exists = conn.execute("SELECT 1 FROM conversations WHERE id=? AND school_id=?", (cid, school_id)).fetchone()
@@ -629,7 +655,7 @@ def learn_conversation(cid: int, request: Request):
         return JSONResponse({"ok": False, "error": "未配置 API Key，无法执行学习提炼"}, status_code=400)
     llm = LLMClient(cfg)
     try:
-        mem_added = memory.extract_from_conversation(cid, llm)
+        mem_added = memory.extract_from_conversation(cid, llm, user_id=_current_user_id(request))
         kno = learning.extract(cid, llm)
         return {"ok": True, "memories_added": mem_added, "knowledge_pending": kno}
     except Exception as e:
@@ -645,36 +671,37 @@ class KnowledgeReq(BaseModel):
 
 
 @app.get("/api/knowledge")
-def list_knowledge():
+def list_knowledge(request: Request):
     conn = db.get_conn()
-    school_id = cfgmod.load_config().get("current_school_id", "hlby")
+    school_id = _current_school_id(request)
     rows = conn.execute(
         "SELECT id, title, source, ktype, hits, created_at, length(content) AS size "
-        "FROM knowledge WHERE school_id=? OR school_id='common' ORDER BY id DESC", (school_id,)
+        "FROM knowledge WHERE (school_id=? OR school_id='common') AND (owner_user_id IS NULL OR owner_user_id=?) ORDER BY id DESC", (school_id, _current_user_id(request))
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 @app.post("/api/knowledge")
-def add_knowledge(req: KnowledgeReq):
+def add_knowledge(req: KnowledgeReq, request: Request):
     if not req.title.strip() or not req.content.strip():
         return JSONResponse({"ok": False, "error": "标题和内容不能为空"}, status_code=400)
-    doc_id, n = rag.add_document(req.title.strip(), req.content.strip(), req.source.strip() or "手动添加", "文档")
+    doc_id, n = rag.add_document(req.title.strip(), req.content.strip(), req.source.strip() or "手动添加", "文档", school_id=_current_school_id(request), owner_user_id=_current_user_id(request))
     return {"ok": True, "id": doc_id, "chunks": n}
 
 
 @app.delete("/api/knowledge/{kid}")
-def delete_knowledge(kid: int):
-    rag.delete_document(kid)
+def delete_knowledge(kid: int, request: Request):
+    user = getattr(request.state, "user", None) or {}
+    rag.delete_document(kid, school_id=_current_school_id(request), owner_user_id=_current_user_id(request), allow_shared=user.get("role") == "admin")
     return {"ok": True}
 
 
 @app.get("/api/knowledge/{kid}")
-def get_knowledge_detail(kid: int):
+def get_knowledge_detail(kid: int, request: Request):
     conn = db.get_conn()
-    school_id = cfgmod.load_config().get("current_school_id", "hlby")
+    school_id = _current_school_id(request)
     row = conn.execute(
-        "SELECT id, title, source, ktype, content, hits, created_at FROM knowledge WHERE id=? AND (school_id=? OR school_id='common')", (kid, school_id)
+        "SELECT id, title, source, ktype, content, hits, created_at FROM knowledge WHERE id=? AND (school_id=? OR school_id='common') AND (owner_user_id IS NULL OR owner_user_id=?)", (kid, school_id, _current_user_id(request))
     ).fetchone()
     if not row:
         return JSONResponse({"ok": False, "error": "文档不存在"}, status_code=404)
@@ -686,8 +713,8 @@ class SearchReq(BaseModel):
 
 
 @app.post("/api/knowledge/search")
-def search_knowledge(req: SearchReq):
-    return rag.search(req.query, top_k=5)
+def search_knowledge(req: SearchReq, request: Request):
+    return rag.search(req.query, top_k=5, school_id=_current_school_id(request), user_id=_current_user_id(request))
 
 
 # ---------- 办事导航与官网电话簿 ----------
@@ -697,8 +724,8 @@ def list_services(q: str = Query(default="", max_length=100)):
 
 
 @app.get("/api/services/{service_id}")
-def get_service(service_id: str, college: str = Query(default="", max_length=100)):
-    detail = services.service_detail(service_id, rag, college)
+def get_service(service_id: str, request: Request, college: str = Query(default="", max_length=100)):
+    detail = services.service_detail(service_id, rag, college, school_id=_current_school_id(request))
     if detail is None:
         return JSONResponse({"error": "未找到该办事事项"}, status_code=404)
     return detail
@@ -710,16 +737,16 @@ def list_colleges():
 
 
 @app.get("/api/colleges/{college_id}")
-def get_college(college_id: str):
+def get_college(college_id: str, request: Request):
     try:
-        return services.college_detail(college_id, rag)
+        return services.college_detail(college_id, rag, school_id=_current_school_id(request))
     except ValueError as error:
         return JSONResponse({"error": str(error)}, status_code=404)
 
 
 @app.get("/api/contacts")
-def list_contacts(q: str = Query(default="", max_length=100)):
-    return services.list_contacts(q)
+def list_contacts(request: Request, q: str = Query(default="", max_length=100)):
+    return services.list_contacts(q, school_id=_current_school_id(request))
 
 
 # ---------- 记忆 ----------
@@ -729,50 +756,50 @@ class MemoryReq(BaseModel):
 
 
 @app.get("/api/memories")
-def list_memories():
-    return memory.list_all()
+def list_memories(request: Request):
+    return memory.list_all(_current_user_id(request))
 
 
 @app.post("/api/memories")
-def add_memory(req: MemoryReq):
+def add_memory(req: MemoryReq, request: Request):
     if not req.content.strip():
         return JSONResponse({"ok": False, "error": "内容不能为空"}, status_code=400)
-    r = memory.add(req.content.strip(), req.category.strip() or "通用", source="手动添加")
+    r = memory.add(req.content.strip(), req.category.strip() or "通用", source="手动添加", user_id=_current_user_id(request))
     return {"ok": True, **r}
 
 
 @app.post("/api/memories/search")
-def search_memories(req: SearchReq):
+def search_memories(req: SearchReq, request: Request):
     """按相关性检索长期记忆（用于记忆召回测试）"""
-    return memory.search(req.query, top_k=5)
+    return memory.search(req.query, top_k=5, user_id=_current_user_id(request))
 
 
 @app.delete("/api/memories/{mid}")
-def delete_memory(mid: int):
-    return memory.delete(mid)
+def delete_memory(mid: int, request: Request):
+    return memory.delete(mid, _current_user_id(request))
 
 
 @app.post("/api/memories/consolidate")
-def consolidate_memories():
+def consolidate_memories(request: Request):
     """记忆巩固：合并高度相似的记忆（保留较新），防止膨胀失真"""
-    return memory.consolidate()
+    return memory.consolidate(user_id=_current_user_id(request))
 
 
 # ---------- 学习中心 ----------
 @app.get("/api/learning")
 def list_learning(request: Request, status: str = "pending"):
-    return learning.list(status, _current_school_id(), _current_user_id(request))
+    return learning.list(status, _current_school_id(request), _current_user_id(request))
 
 
 @app.get("/api/learning/materials")
-def list_learning_materials():
-    """列出当前学校可用于学习分析的资料，不返回正文。"""
+def list_learning_materials(request: Request):
+    """只列出学生上传的学习资料，不返回校园通用知识库正文。"""
     conn = db.get_conn()
-    school_id = cfgmod.load_config().get("current_school_id", "hlby")
+    school_id = _current_school_id(request)
     rows = conn.execute(
         "SELECT id,title,source,ktype,created_at,length(content) AS size "
-        "FROM knowledge WHERE school_id=? OR school_id='common' ORDER BY id DESC",
-        (school_id,),
+        "FROM knowledge WHERE ktype='学习资料' AND (school_id=? OR school_id='common') AND (owner_user_id IS NULL OR owner_user_id=?) ORDER BY id DESC",
+        (school_id, _current_user_id(request)),
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -786,7 +813,7 @@ class LearningAnalyzeReq(BaseModel):
 
 
 @app.post("/api/learning/analyze")
-def analyze_learning_materials(req: LearningAnalyzeReq):
+def analyze_learning_materials(req: LearningAnalyzeReq, request: Request):
     """合并知识库资料与上传资料，调用 DeepSeek 生成考点和自测题。"""
     cfg = cfgmod.load_config()
     if not cfg.get("api_key"):
@@ -801,6 +828,8 @@ def analyze_learning_materials(req: LearningAnalyzeReq):
             uploaded_content[:60000],
             source="学习区上传",
             ktype="学习资料",
+            school_id=_current_school_id(request),
+            owner_user_id=_current_user_id(request),
         )
         doc_ids.append(uploaded_doc_id)
         uploaded_title = ""
@@ -812,6 +841,8 @@ def analyze_learning_materials(req: LearningAnalyzeReq):
             uploaded_content,
             LLMClient(cfg),
             question_count=req.question_count,
+            school_id=_current_school_id(request),
+            user_id=_current_user_id(request),
         )
         result["uploaded_document_id"] = uploaded_doc_id
         return {"ok": True, **result}
@@ -822,7 +853,7 @@ def analyze_learning_materials(req: LearningAnalyzeReq):
 
 @app.get("/api/learning/stats")
 def learning_stats(request: Request):
-    return learning.stats(_current_school_id(), _current_user_id(request))
+    return learning.stats(_current_school_id(request), _current_user_id(request))
 
 
 class ReviewReq(BaseModel):
@@ -869,17 +900,29 @@ class ToolRunReq(BaseModel):
 
 
 @app.post("/api/tools/run")
-def run_tool(req: ToolRunReq):
+def run_tool(req: ToolRunReq, request: Request):
+    tokens = toolbox.set_request_context(_current_user_id(request), _user_cfg(request))
     try:
         return {"ok": True, "result": toolbox.run_tool(req.name, req.args)}
     except Exception as e:
         logger.exception("工具执行失败：%s", req.name)
         return JSONResponse({"ok": False, "error": _safe_error(e, cfgmod.load_config())}, status_code=400)
+    finally:
+        toolbox.reset_request_context(tokens)
 
 
 @app.get("/api/notices")
-def list_notices():
-    return toolbox.search_campus_notice("")["matches"]
+def list_notices(request: Request):
+    tokens = toolbox.set_request_context(_current_user_id(request), _user_cfg(request))
+    try:
+        return toolbox.search_campus_notice("")["matches"]
+    finally:
+        toolbox.reset_request_context(tokens)
+
+
+@app.get("/api/web-search/status")
+def web_search_status():
+    return web_search.status()
 
 
 # ---------- 启动 ----------

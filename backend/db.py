@@ -47,6 +47,7 @@ def init_db():
         content TEXT,
         category TEXT,
         source TEXT,
+        user_id INTEGER,
         created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS knowledge(
@@ -56,6 +57,7 @@ def init_db():
         content TEXT,
         ktype TEXT,
         school_id TEXT DEFAULT 'hlby',
+        owner_user_id INTEGER,
         hits INTEGER DEFAULT 0,
         created_at TEXT
     );
@@ -86,6 +88,7 @@ def init_db():
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'user',
+        school_id TEXT NOT NULL DEFAULT 'hlby',
         created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS sessions(
@@ -103,6 +106,8 @@ def init_db():
     knowledge_columns = {row[1] for row in conn.execute("PRAGMA table_info(knowledge)")}
     if "school_id" not in knowledge_columns:
         conn.execute("ALTER TABLE knowledge ADD COLUMN school_id TEXT DEFAULT 'hlby'")
+    if "owner_user_id" not in knowledge_columns:
+        conn.execute("ALTER TABLE knowledge ADD COLUMN owner_user_id INTEGER")
     # 旧版单校资料属于原始学校，切换模板后不会泄漏到其他学校。
     conn.execute("UPDATE knowledge SET school_id='hlby' WHERE school_id IS NULL OR school_id='' ")
     conversation_columns = {row[1] for row in conn.execute("PRAGMA table_info(conversations)")}
@@ -111,4 +116,10 @@ def init_db():
     if "user_id" not in conversation_columns:
         conn.execute("ALTER TABLE conversations ADD COLUMN user_id INTEGER")
     conn.execute("UPDATE conversations SET school_id='hlby' WHERE school_id IS NULL OR school_id='' ")
+    user_columns = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+    if "school_id" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN school_id TEXT NOT NULL DEFAULT 'hlby'")
+    memory_columns = {row[1] for row in conn.execute("PRAGMA table_info(memories)")}
+    if "user_id" not in memory_columns:
+        conn.execute("ALTER TABLE memories ADD COLUMN user_id INTEGER")
     conn.commit()

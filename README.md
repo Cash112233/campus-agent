@@ -136,9 +136,15 @@ python -X utf8 -B output/byau_import_rag.py import
 
 导入只接纳新版本确认的完整正文，按来源地址更新对应文档与切块，保留原文档编号和其他资料。导入前建议使用 SQLite backup 备份数据库。主程序使用内存检索索引，批量导入后重启 Web 服务使更新生效。单次页数上限不代表全站覆盖全部完成。
 
-## 最新联网搜索（Tavily）
+## 最新联网搜索（火山引擎）
 
-联网搜索只在知识库没有命中或问题带有时效词时调用，并按发布时间过滤、倒序返回最近信息。先在服务端配置页保存 `tavily_api_key`；未配置时工具会明确返回 `TAVILY_API_KEY 未配置`。
+联网搜索只在知识库没有命中或问题带有时效词时调用，并按发布时间过滤、倒序返回最近信息。搜索服务使用火山引擎联网搜索 API，需要配置 `VOLCENGINE_API_KEY` 或 `volcengine_api_key`；未配置时会明确报错，不会用假数据代替。
+
+启动本机 SearXNG（需要安装 Docker）：
+
+```powershell
+docker compose -f docker-compose.searxng.yml up -d
+```
 
 手动验证命令：
 

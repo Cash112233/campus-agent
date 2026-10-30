@@ -140,11 +140,12 @@ class RAG:
                 {"content": r["content"], "indexed_at": r["created_at"], "doc_id": r["doc_id"], "title": r["title"], "source": r["source"], "ktype": r["ktype"]},
             )
 
-    def add_document(self, title, content, source="手动添加", ktype="文档"):
+    def add_document(self, title, content, source="手动添加", ktype="文档", school_id=None, owner_user_id=None):
         conn = get_conn()
+        target_school = str(school_id or active_school_id())
         cur = conn.execute(
-            "INSERT INTO knowledge(title, source, content, ktype, school_id, created_at) VALUES(?,?,?,?,?,?)",
-            (title, source, content, ktype, active_school_id(), now()),
+            "INSERT INTO knowledge(title, source, content, ktype, school_id, owner_user_id, created_at) VALUES(?,?,?,?,?,?,?)",
+            (title, source, content, ktype, target_school, owner_user_id, now()),
         )
         doc_id = cur.lastrowid
         chunks = chunk_text(content)
@@ -157,19 +158,37 @@ class RAG:
         self.reload()
         return doc_id, len(chunks)
 
-    def delete_document(self, doc_id):
+    def delete_document(self, doc_id, school_id=None, owner_user_id=None, allow_shared=False):
         conn = get_conn()
-        conn.execute("DELETE FROM knowledge WHERE id=? AND (school_id=? OR school_id='common')", (doc_id, active_school_id()))
+        school = str(school_id or active_school_id())
+        if allow_shared:
+            conn.execute("DELETE FROM knowledge WHERE id=? AND (school_id=? OR school_id='common')", (doc_id, school))
+        else:
+            conn.execute("DELETE FROM knowledge WHERE id=? AND (school_id=? OR school_id='common') AND owner_user_id=?", (doc_id, school, owner_user_id))
         conn.execute("DELETE FROM knowledge_chunks WHERE doc_id=? AND NOT EXISTS (SELECT 1 FROM knowledge WHERE knowledge.id=knowledge_chunks.doc_id)", (doc_id,))
         conn.commit()
         self.reload()
 
-    def search(self, query, top_k=4):
+    def search(self, query, top_k=4, school_id=None, user_id=None):
         """标题加权、别称扩展与主题/意图约束；没有对应资料时返回空。"""
         if not str(query or "").strip() or top_k <= 0:
             return []
         q, groups, expanded = query_terms(query)
-        res = self.index.search(expanded, top_k=len(self.index.docs), predicate=lambda d:
+        index = self.index
+        target_school = str(school_id or active_school_id())
+        if target_school != active_school_id() or user_id is not None:
+            index = TfidfIndex()
+            conn = get_conn()
+            rows = conn.execute(
+                "SELECT c.id chunk_id,c.content,k.id doc_id,k.title,k.source,k.ktype,k.created_at,k.school_id "
+                "FROM knowledge_chunks c JOIN knowledge k ON k.id=c.doc_id WHERE (k.school_id=? OR k.school_id='common') AND (k.owner_user_id IS NULL OR k.owner_user_id=?)",
+                (target_school, user_id),
+            ).fetchall()
+            for row in rows:
+                if row["ktype"] == "电话簿" and not source_url(row["source"]):
+                    continue
+                index.add(row["chunk_id"], row["title"] + "\n" + row["content"], {"content": row["content"], "indexed_at": row["created_at"], "doc_id": row["doc_id"], "title": row["title"], "source": row["source"], "ktype": row["ktype"]})
+        res = index.search(expanded, top_k=len(index.docs), predicate=lambda d:
             is_relevant(q, groups, d["meta"].get("title"), d["meta"].get("content", "")))
         for r in res:
             title = compact(r["meta"].get("title", "").removeprefix("[官网]"))

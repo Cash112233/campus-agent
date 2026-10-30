@@ -53,6 +53,19 @@ class StreamMessage:
         self.tool_calls = tool_calls or None
 
 
+def friendly_error(error):
+    """将模型连接异常转换为不泄露内部请求细节的用户提示。"""
+    text = str(error or "").lower()
+    status = getattr(error, "status_code", None)
+    if status in (401, 403) or "authentication" in text or "invalid_api_key" in text:
+        return "API Key 无效或已失效，请在设置中重新配置。"
+    if "timeout" in text or "timed out" in text:
+        return "模型服务响应超时，请检查网络后重试。"
+    if "connection" in text or "network" in text or "dns" in text:
+        return "无法连接模型服务，请检查网络、代理或 base_url 后重试。"
+    return "模型服务暂时不可用，请稍后重试。"
+
+
 class LLMClient:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -122,8 +135,13 @@ class LLMClient:
                                 acc["name"] += tc.function.name
                             if tc.function.arguments:
                                 acc["arguments"] += tc.function.arguments
-        except Exception:
-            msg = self.chat(messages, tools=tools, temperature=temperature)
+        except Exception as stream_error:
+            # 流式连接偶发 EOF/连接重置时，先短暂退避，再走带重试的普通请求。
+            time.sleep(1.0)
+            try:
+                msg = self.chat(messages, tools=tools, temperature=temperature)
+            except Exception as fallback_error:
+                raise RuntimeError(friendly_error(fallback_error)) from fallback_error
             yield {"type": "final", "message": msg}
             return
 
