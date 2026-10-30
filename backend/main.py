@@ -6,6 +6,7 @@
 import json
 import logging
 import os
+import threading
 import secrets
 import threading
 import webbrowser
@@ -175,7 +176,8 @@ async def access_guard(request: Request, call_next):
 
 # ---------- 初始化 ----------
 db.init_db()
-seed_knowledge.seed_if_empty()   # 云端/首次启动：自动恢复知识库
+# 云端首次启动时后台导入，避免大知识库阻塞平台健康检查
+threading.Thread(target=seed_knowledge.seed_if_empty, name="knowledge-seed", daemon=True).start()
 rag = RAG()
 memory = MemoryManager()
 learning = LearningEngine(rag)
