@@ -1011,7 +1011,8 @@ $('#account-password').addEventListener('keydown', e => { if (e.key === 'Enter')
   try {
     const resp = await fetch('/api/public/auth');
     const data = await resp.json();
-    if (data && data.account_setup_required && !data.required) { showAccountGate('setup'); return; }
+    // 首次部署必须先创建账号；即使同时配置了访问口令，也不能遮挡注册入口。
+    if (data && data.account_setup_required) { showAccountGate('setup'); return; }
     let accountOK = false;
     if (data && data.account_required) {
       const me = await fetch('/api/auth/me', {headers: {'X-Access-Token': getToken()}}).catch(() => null);
