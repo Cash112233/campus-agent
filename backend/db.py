@@ -115,6 +115,8 @@ def init_db():
         conn.execute("ALTER TABLE conversations ADD COLUMN school_id TEXT DEFAULT 'hlby'")
     if "user_id" not in conversation_columns:
         conn.execute("ALTER TABLE conversations ADD COLUMN user_id INTEGER")
+    if "device_id" not in conversation_columns:
+        conn.execute("ALTER TABLE conversations ADD COLUMN device_id TEXT")
     conn.execute("UPDATE conversations SET school_id='hlby' WHERE school_id IS NULL OR school_id='' ")
     user_columns = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
     if "school_id" not in user_columns:

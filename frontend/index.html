@@ -927,8 +927,6 @@ async function api(path, opts = {}) {
   let data = null;
   try { data = await resp.json(); } catch (e) { data = null; }
   if (resp.status === 401) {
-    if (data && data.code === 'AUTH_REQUIRED') showAccountGate('login');
-    else showTokenGate();
     throw new Error((data && data.error) || '需要认证');
   }
   if (!resp.ok) throw new Error((data && data.error) || `请求失败 ${resp.status}`);
@@ -1007,26 +1005,7 @@ async function logoutAccount() {
 }
 $('#account-submit').addEventListener('click', submitAccount);
 $('#account-password').addEventListener('keydown', e => { if (e.key === 'Enter') submitAccount(); });
-(async function checkTokenGate() {
-  try {
-    const resp = await fetch('/api/public/auth');
-    const data = await resp.json();
-    // 首次部署必须先创建账号；即使同时配置了访问口令，也不能遮挡注册入口。
-    if (data && data.account_setup_required) { showAccountGate('setup'); return; }
-    let accountOK = false;
-    if (data && data.account_required) {
-      const me = await fetch('/api/auth/me', {headers: {'X-Access-Token': getToken()}}).catch(() => null);
-      const current = me ? await me.json().catch(() => null) : null;
-      accountOK = !!(current && current.authenticated && current.user && current.user.id);
-      if (accountOK) {
-        currentUser = current.user;
-        $('#account-user').style.display = 'flex';
-        $('#account-name').textContent = current.user.username;
-      } else { showAccountGate('login'); return; }
-    }
-    if (data && data.required && !getToken() && !accountOK) showTokenGate();
-  } catch (e) { /* 探测失败不阻塞页面 */ }
-})();
+// 账号登录已移除：设备标识由服务端通过 campus_device_id Cookie 自动管理。
 function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function safeSourceUrl(value) {
   try {

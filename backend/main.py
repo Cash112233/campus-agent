@@ -6,7 +6,6 @@
 import json
 import logging
 import os
-import threading
 import secrets
 import threading
 import webbrowser
@@ -96,6 +95,11 @@ def _current_user_id(request=None):
     return user_id if user_id and user_id > 0 else None
 
 
+def _current_device_id(request=None):
+    state = getattr(request, "state", None) if request is not None else None
+    return str(getattr(state, "device_id", "") or "")[:128]
+
+
 def _require_admin(request):
     """系统级配置和学校目录只能由管理员修改；未启用账号认证时保留兼容模式。"""
     user = getattr(getattr(request, "state", None), "user", None) if request is not None else None
@@ -111,6 +115,9 @@ def _conversation_belongs_to_current_school(conversation_id, request=None):
     if user_id is not None:
         sql += " AND user_id=?"
         params.append(user_id)
+    else:
+        sql += " AND device_id=?"
+        params.append(_current_device_id(request))
     row = db.get_conn().execute(sql, tuple(params)).fetchone()
     return bool(row)
 
@@ -122,6 +129,9 @@ def _learned_belongs_to_current_school(learned_id, request=None):
     if user_id is not None:
         sql += " AND c.user_id=?"
         params.append(user_id)
+    else:
+        sql += " AND c.device_id=?"
+        params.append(_current_device_id(request))
     row = db.get_conn().execute(sql, tuple(params)).fetchone()
     return bool(row)
 
@@ -133,6 +143,9 @@ def _message_belongs_to_current_school(message_id, request=None):
     if user_id is not None:
         sql += " AND c.user_id=?"
         params.append(user_id)
+    else:
+        sql += " AND c.device_id=?"
+        params.append(_current_device_id(request))
     row = db.get_conn().execute(sql, tuple(params)).fetchone()
     return bool(row)
 
@@ -154,25 +167,13 @@ async def request_size_guard(request: Request, call_next):
 # ---------- 访问口令（公网部署保护） ----------
 @app.middleware("http")
 async def access_guard(request: Request, call_next):
-    """账号会话优先；兼容部署口令作为管理员后备认证。"""
-    token = cfgmod.load_config().get("access_token") or ""
-    path = request.url.path
-    if path.startswith("/api/") and not path.startswith("/api/public/"):
-        supplied_access = request.headers.get("x-access-token") or ""
-        bearer = request.headers.get("authorization") or ""
-        supplied_session = bearer[7:].strip() if bearer.lower().startswith("bearer ") else ""
-        supplied_session = supplied_session or request.cookies.get("campus_session", "")
-        user = auth.get_user_by_token(supplied_session)
-        access_ok = bool(token and supplied_access and secrets.compare_digest(supplied_access, token))
-        if user:
-            request.state.user = user
-        elif access_ok:
-            request.state.user = {"id": 0, "username": "部署管理员", "role": "admin", "auth_type": "access_token"}
-        elif auth.user_count():
-            return JSONResponse({"error": "需要登录", "code": "AUTH_REQUIRED"}, status_code=401)
-        elif token:
-            return JSONResponse({"error": "需要访问口令", "code": "ACCESS_TOKEN_REQUIRED"}, status_code=401)
-    return await call_next(request)
+    """无账号门槛；为每个浏览器签发独立设备会话。"""
+    device_id = request.cookies.get("campus_device_id") or request.headers.get("x-device-id") or secrets.token_urlsafe(24)
+    request.state.device_id = device_id
+    response = await call_next(request)
+    if not request.cookies.get("campus_device_id"):
+        response.set_cookie("campus_device_id", device_id, max_age=31536000, httponly=True, samesite="lax", secure=request.url.scheme == "https", path="/")
+    return response
 
 # ---------- 初始化 ----------
 db.init_db()
@@ -532,7 +533,7 @@ class ChatReq(BaseModel):
 def chat(req: ChatReq, request: Request):
     user_id = _current_user_id(request)
     cfg = _user_cfg(request)
-    if req.conversation_id and user_id is not None and not _conversation_belongs_to_current_school(req.conversation_id, request):
+    if req.conversation_id and not _conversation_belongs_to_current_school(req.conversation_id, request):
         return JSONResponse({"ok": False, "error": "该对话不属于当前账号"}, status_code=404)
     def gen():
         try:
@@ -554,8 +555,8 @@ def list_conversations(request: Request):
     user_id = _current_user_id(request)
     if user_id is None:
         rows = conn.execute(
-            "SELECT id, title, created_at, updated_at FROM conversations WHERE school_id=? ORDER BY updated_at DESC LIMIT 100",
-            (school_id,),
+            "SELECT id, title, created_at, updated_at FROM conversations WHERE school_id=? AND device_id=? ORDER BY updated_at DESC LIMIT 100",
+            (school_id, _current_device_id(request)),
         ).fetchall()
     else:
         rows = conn.execute(
@@ -572,8 +573,8 @@ def new_conversation(request: Request):
     user_id = _current_user_id(request)
     if user_id is None:
         cur = conn.execute(
-            "INSERT INTO conversations(title, school_id, created_at, updated_at) VALUES('新对话', ?, ?, ?)",
-            (school_id, db.now(), db.now()),
+            "INSERT INTO conversations(title, school_id, device_id, created_at, updated_at) VALUES('新对话', ?, ?, ?, ?)",
+            (school_id, _current_device_id(request), db.now(), db.now()),
         )
     else:
         cur = conn.execute(
@@ -589,10 +590,11 @@ def delete_conversation(cid: int, request: Request):
     conn = db.get_conn()
     school_id = _current_school_id(request)
     user_id = _current_user_id(request)
-    scope = " AND user_id=?" if user_id is not None else ""
-    params = (cid, cid, school_id, user_id) if user_id is not None else (cid, cid, school_id)
+    scope = " AND user_id=?" if user_id is not None else " AND device_id=?"
+    owner = user_id if user_id is not None else _current_device_id(request)
+    params = (cid, cid, school_id, owner)
     conn.execute(f"DELETE FROM messages WHERE conversation_id=? AND EXISTS (SELECT 1 FROM conversations WHERE id=? AND school_id=?{scope})", params)
-    conn.execute(f"DELETE FROM conversations WHERE id=? AND school_id=?{scope}", (cid, school_id, user_id) if user_id is not None else (cid, school_id))
+    conn.execute(f"DELETE FROM conversations WHERE id=? AND school_id=?{scope}", (cid, school_id, owner))
     conn.commit()
     return {"ok": True}
 
@@ -610,7 +612,7 @@ def rename_conversation(cid: int, req: RenameReq, request: Request):
     school_id = _current_school_id(request)
     user_id = _current_user_id(request)
     if user_id is None:
-        conn.execute("UPDATE conversations SET title=?, updated_at=? WHERE id=? AND school_id=?", (title, db.now(), cid, school_id))
+        conn.execute("UPDATE conversations SET title=?, updated_at=? WHERE id=? AND school_id=? AND device_id=?", (title, db.now(), cid, school_id, _current_device_id(request)))
     else:
         conn.execute("UPDATE conversations SET title=?, updated_at=? WHERE id=? AND school_id=? AND user_id=?", (title, db.now(), cid, school_id, user_id))
     conn.commit()
@@ -623,7 +625,7 @@ def get_messages(cid: int, request: Request):
     school_id = _current_school_id(request)
     user_id = _current_user_id(request)
     if user_id is None:
-        exists = conn.execute("SELECT 1 FROM conversations WHERE id=? AND school_id=?", (cid, school_id)).fetchone()
+        exists = conn.execute("SELECT 1 FROM conversations WHERE id=? AND school_id=? AND device_id=?", (cid, school_id, _current_device_id(request))).fetchone()
     else:
         exists = conn.execute("SELECT 1 FROM conversations WHERE id=? AND school_id=? AND user_id=?", (cid, school_id, user_id)).fetchone()
     if not exists:
