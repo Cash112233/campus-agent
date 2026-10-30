@@ -13,7 +13,7 @@ from db import get_conn, now
 
 ITERATIONS = 310_000
 SESSION_DAYS = 7
-USERNAME_RE = re.compile(r"^[\w.-]{3,32}$", re.UNICODE)
+USERNAME_RE = re.compile(r"^[\w.-]{2,32}$", re.UNICODE)
 
 
 def _utc_now():
@@ -27,7 +27,7 @@ def _iso(dt):
 def _normalize_username(username):
     value = str(username or "").strip()
     if not USERNAME_RE.fullmatch(value):
-        raise ValueError("用户名需为 3-32 位字母、数字、下划线、点号或短横线")
+        raise ValueError("用户名需为 2-32 位字母、数字、下划线、点号或短横线")
     return value
 
 

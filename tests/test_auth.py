@@ -35,6 +35,12 @@ def test_first_account_hashes_password_and_session_can_be_revoked(auth_db):
         assert auth.get_user_by_token(token) is None
 
 
+def test_two_character_username_is_allowed(auth_db):
+    with patch("auth.get_conn", return_value=auth_db):
+        user = auth.register_first_user("梦梦", "a-strong-password")
+        assert user["username"] == "梦梦"
+
+
 def test_wrong_password_and_second_initial_registration_are_rejected(auth_db):
     with patch("auth.get_conn", return_value=auth_db):
         auth.register_first_user("campus_admin", "a-strong-password")
